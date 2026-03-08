@@ -1,5 +1,41 @@
 import "./styles.css";
 import React, { useState, useEffect, useRef, useCallback } from "react";
+
+/* ─────────────────────────────────────────
+   SKILLX — React Coding Platform
+   Font: Syne (display) + JetBrains Mono (code)
+   Palette: Obsidian · Plasma Violet · Acid Green · Crimson
+───────────────────────────────────────── */
+
+
+/* ── GLOBAL STYLES ── */
+// Styles loaded from styles.css
+
+
+/* ─────────────────────────────────────────
+   API CONFIG — Django Backend
+───────────────────────────────────────── */
+const API_BASE = "http://localhost:8000/api";
+
+const apiCall = async (endpoint, method = "GET", body = null, requiresAuth = false) => {
+  const headers = { "Content-Type": "application/json" };
+  if (requiresAuth) {
+    const token = localStorage.getItem("skillx_token");
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+  }
+  const res = await fetch(`${API_BASE}${endpoint}`, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : null,
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Something went wrong");
+  return data;
+};
+
+/* ─────────────────────────────────────────
+   CANVAS: Plasma + Constellation + Particles
+───────────────────────────────────────── */
 const SkillXCanvas = () => {
   const canvasRef = useRef(null);
   useEffect(() => {
@@ -232,7 +268,7 @@ const Landing = ({ onNav }) => {
             <button className="btn btn-acid btn-xl" onClick={() => onNav("signup")}>
               Start for Free →
             </button>
-            <button className="btn btn-outline btn-xl" onClick={() => onNav("dashboard")}>
+            <button className="btn btn-outline btn-xl" onClick={() => onNav("login")}>
               View Dashboard
             </button>
           </div>
@@ -404,25 +440,65 @@ const AuthPage = ({ mode, onNav, onAuth }) => {
   const strengthColors = ["", "#f43f5e", "#fbbf24", "#818cf8", "#a3e635"];
   const strengthLabels = ["", "Weak", "Fair", "Good", "Strong ✦"];
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
-    const email = fd.get("email") || "";
-    const pass  = fd.get("pass")  || "";
+    const email    = fd.get("email")    || "";
+    const pass     = fd.get("pass")     || "";
+    const fname    = fd.get("fname")    || "";
+    const confirm  = fd.get("confirm")  || "";
+
+    // Frontend validation
     const errsNew = {};
-    if (!email.includes("@")) errsNew.email = "Enter a valid email address";
+    if (isLogin) {
+      const uname = fd.get("username") || "";
+      if (!uname.trim()) errsNew.email = "Username is required";
+    } else {
+      if (!email.includes("@")) errsNew.email = "Enter a valid email address";
+    }
     if (pass.length < (isLogin ? 5 : 8)) errsNew.pass = `Password must be ${isLogin ? "5" : "8"}+ characters`;
-    if (!isLogin && fd.get("confirm") !== pass) errsNew.confirm = "Passwords do not match";
+    if (!isLogin && confirm !== pass) errsNew.confirm = "Passwords do not match";
     if (Object.keys(errsNew).length) { setErrs(errsNew); return; }
     setErrs({});
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      const name = fd.get("fname") || email.split("@")[0];
+
+    try {
+      let data;
+      if (isLogin) {
+        // Real login API call — use username field directly
+        const usernameField = fd.get("username") || "";
+        data = await apiCall("/login/", "POST", {
+          username: usernameField,
+          password: pass,
+        });
+      } else {
+        // Real signup API call
+        data = await apiCall("/signup/", "POST", {
+          username: fname || email.split("@")[0],
+          email:    email,
+          password: pass,
+        });
+      }
+
+      // Store JWT token — Fix #8
+      if (data.token) {
+        try { localStorage.setItem("skillx_token", data.token); } catch(e) {}
+      }
+
+      const name = data.username || email.split("@")[0];
       onAuth(name);
-      toast(isLogin ? `✦ Welcome back, ${name}!` : `✦ Account created! Welcome, ${name}!`, isLogin ? "#a855f7" : "#a3e635");
+      toast(
+        isLogin ? `✦ Welcome back, ${name}!` : `✦ Account created! Welcome, ${name}!`,
+        isLogin ? "#a855f7" : "#a3e635"
+      );
       onNav("dashboard");
-    }, isLogin ? 1400 : 1700);
+
+    } catch (err) {
+      // Fix #10 — show real backend error
+      setErrs({ api: err.message || "Server error. Is backend running?" });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -436,8 +512,14 @@ const AuthPage = ({ mode, onNav, onAuth }) => {
         </div>
         <h2 className="auth-title">{isLogin ? "Welcome Back, Dev ✦" : "Access Granted ✦"}</h2>
         <p className="auth-sub">{isLogin ? "Authenticate to continue" : "Join 50K+ developers levelling up"}</p>
+        {/* Fix #10 — show backend/API errors */}
+        {errs.api && (
+          <div style={{ padding:"10px 14px", background:"rgba(244,63,94,.08)", border:"1px solid rgba(244,63,94,.25)", borderRadius:10, color:"#f43f5e", fontSize:13, fontWeight:600, marginBottom:16 }}>
+            ⚠️ {errs.api}
+          </div>
+        )}
 
-        <button className="google-btn" onClick={() => { onAuth("Developer"); toast("✦ Signed in with Google!", "#a855f7"); onNav("dashboard"); }}>
+        <button className="google-btn" onClick={() => toast("⚠️ Google Sign-in coming soon!", "#f43f5e")} style={{ opacity: 0.5, cursor: "not-allowed" }}>
           <svg width="18" height="18" viewBox="0 0 24 24">
             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
             <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -462,11 +544,19 @@ const AuthPage = ({ mode, onNav, onAuth }) => {
               </div>
             </div>
           )}
-          <div className="form-group">
-            <label className="form-label">Email</label>
-            <div className="input-wrap"><span>✉</span><input name="email" type="email" placeholder="you@example.com" required /></div>
-            {errs.email && <span className="form-error">{errs.email}</span>}
-          </div>
+          {isLogin ? (
+            <div className="form-group">
+              <label className="form-label">Username</label>
+              <div className="input-wrap"><span>👤</span><input name="username" placeholder="Your username" required /></div>
+              {errs.email && <span className="form-error">{errs.email}</span>}
+            </div>
+          ) : (
+            <div className="form-group">
+              <label className="form-label">Email</label>
+              <div className="input-wrap"><span>✉</span><input name="email" type="email" placeholder="you@example.com" required /></div>
+              {errs.email && <span className="form-error">{errs.email}</span>}
+            </div>
+          )}
           <div className="form-group">
             <label className="form-label">Password</label>
             <div className="input-wrap"><span>🔒</span><input name="pass" type="password" placeholder={isLogin ? "Your password" : "Min. 8 characters"} required value={pwVal} onChange={e => setPwVal(e.target.value)} /></div>
@@ -501,7 +591,23 @@ const AuthPage = ({ mode, onNav, onAuth }) => {
 /* ─────────────────────────────────────────
    SIDEBAR
 ───────────────────────────────────────── */
-const Sidebar = ({ activePage, onNav, username }) => {
+const Sidebar = ({ activePage, onNav, username, onLogout, level, streak }) => {
+  // Fix #1 — safe username, never crashes on null/undefined
+  const safeName = (username && username.trim()) ? username.trim() : "Developer";
+  const avatarLetter = safeName.charAt(0).toUpperCase();
+
+  // Dynamic level label based on real level from backend
+  const safeLevel = level && level > 0 ? level : 1;
+  const getLevelTitle = (lvl) => {
+    if (lvl >= 50) return "Legend";
+    if (lvl >= 30) return "Master";
+    if (lvl >= 20) return "Advanced";
+    if (lvl >= 10) return "Intermediate";
+    if (lvl >= 5)  return "Beginner";
+    return "Newbie";
+  };
+  const levelTitle = getLevelTitle(safeLevel);
+
   const items = [
     { id: "dashboard", icon: "⬡", label: "Dashboard" },
     { id: "coding",    icon: "{ }", label: "Practice", badge: "3" },
@@ -515,10 +621,10 @@ const Sidebar = ({ activePage, onNav, username }) => {
         <span>Skill<span className="grad-text">X</span></span>
       </div>
       <div className="sidebar-user">
-        <div className="avatar">{username.charAt(0).toUpperCase()}</div>
+        <div className="avatar">{avatarLetter}</div>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 700 }}>{username}</div>
-          <div style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--mono)" }} className="grad-text">✦ Level 12 · Expert</div>
+          <div style={{ fontSize: 13, fontWeight: 700 }}>{safeName}</div>
+          <div style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--mono)" }} className="grad-text">✦ Level {safeLevel} · {levelTitle}</div>
         </div>
       </div>
       <nav className="sidebar-nav">
@@ -533,12 +639,19 @@ const Sidebar = ({ activePage, onNav, username }) => {
           <span style={{ fontFamily: "var(--mono)", fontSize: 15, minWidth: 20 }}>←</span>
           <span>Home</span>
         </button>
+        {/* Fix #9 — Logout clears session */}
+        {onLogout && (
+          <button className="nav-item" onClick={onLogout} style={{ marginTop: "auto", color: "var(--crim)", borderColor: "rgba(244,63,94,.15)" }}>
+            <span style={{ fontFamily: "var(--mono)", fontSize: 15, minWidth: 20 }}>⏻</span>
+            <span>Logout</span>
+          </button>
+        )}
       </nav>
       <div className="sidebar-footer">
         <div className="streak-box">
           <span style={{ fontSize: 26, animation: "sfPulse 1.5s ease-in-out infinite" }}>⭐</span>
           <div>
-            <div style={{ fontSize: 24, fontWeight: 900, color: "var(--amber)", lineHeight: 1, fontFamily: "var(--mono)" }}>7</div>
+            <div style={{ fontSize: 24, fontWeight: 900, color: "var(--amber)", lineHeight: 1, fontFamily: "var(--mono)" }}>{streak || 0}</div>
             <div style={{ fontSize: 11, color: "var(--muted)", letterSpacing: ".5px", textTransform: "uppercase" }}>Day Streak</div>
           </div>
         </div>
@@ -550,19 +663,49 @@ const Sidebar = ({ activePage, onNav, username }) => {
 /* ─────────────────────────────────────────
    DASHBOARD
 ───────────────────────────────────────── */
-const Dashboard = ({ onNav, username }) => {
-  const [counts, setCounts] = useState([0, 0, 0, 0]);
+const Dashboard = ({ onNav, username, onLogout }) => {
+  const [counts, setCounts]     = useState([0, 0, 0, 0]);
+  const [stats,  setStats]      = useState(null);
+  const [statsErr, setStatsErr] = useState("");
+  const [userLevel, setUserLevel] = useState(1);
+  const [userStreak, setUserStreak] = useState(0);
   const toast = React.useContext(ToastContext);
-  const targets = [87, 243, 7, 3];
+
+  // Fix #2 & #3 — fetch real stats from backend
   useEffect(() => {
-    targets.forEach((t, i) => {
-      let c = 0;
-      const iv = setInterval(() => {
-        c = Math.min(c + Math.ceil(t / 50), t);
-        setCounts(p => { const n = [...p]; n[i] = c; return n; });
-        if (c >= t) clearInterval(iv);
-      }, 24);
-    });
+    const fetchStats = async () => {
+      try {
+        const data = await apiCall("/dashboard/", "GET", null, true);
+        setStats(data);
+        const lvl = data.level || 1;
+        setUserLevel(lvl);
+        try { localStorage.setItem("skillx_level", lvl); } catch(e) {}
+        const str = data.streak || 0;
+        setUserStreak(str);
+        try { localStorage.setItem("skillx_streak", str); } catch(e) {}
+        // Animate real numbers
+        const targets = [
+          data.accuracy        || 0,
+          data.problems_solved || 0,
+          data.streak          || 0,
+          (data.weak_topics && data.weak_topics.length) || 0,
+        ];
+        targets.forEach((t, i) => {
+          let c = 0;
+          const iv = setInterval(() => {
+            c = Math.min(c + Math.ceil((t || 1) / 50), t);
+            setCounts(p => { const n = [...p]; n[i] = c; return n; });
+            if (c >= t) clearInterval(iv);
+          }, 24);
+        });
+      } catch (err) {
+        // Fix #10 — show error if backend is down
+        setStatsErr("Could not load stats. " + (err.message || "Check if backend is running."));
+        // Fallback to zeros animation
+        [0,0,0,0].forEach((t, i) => setCounts(p => { const n=[...p]; n[i]=0; return n; }));
+      }
+    };
+    fetchStats();
   }, []);
 
   const chartRef = useRef(null);
@@ -590,30 +733,40 @@ const Dashboard = ({ onNav, username }) => {
     return () => ch.destroy();
   }, []);
 
+  const weakTopicsLabel = stats && stats.weak_topics
+    ? stats.weak_topics.join(" · ")
+    : "DP · Graphs · Tries";
+
   const cards = [
-    { icon:"🎯", val:counts[0], sfx:"%", label:"Accuracy", trend:"↑ +4% this week", up:true },
-    { icon:"✅", val:counts[1], sfx:"", label:"Problems Solved", trend:"↑ +18 this week", up:true },
-    { icon:"⭐", val:counts[2], sfx:"", label:"Day Streak", trend:"↑ Personal best", up:true },
-    { icon:"🧠", val:counts[3], sfx:"", label:"Weak Topics", trend:"DP · Graphs · Tries", up:false },
+    { icon:"🎯", val:counts[0], sfx:"%", label:"Accuracy",       trend:"↑ +4% this week",  up:true  },
+    { icon:"✅", val:counts[1], sfx:"",  label:"Problems Solved", trend:"↑ +18 this week",  up:true  },
+    { icon:"⭐", val:counts[2], sfx:"",  label:"Day Streak",      trend:"↑ Personal best",  up:true  },
+    { icon:"🧠", val:counts[3], sfx:"",  label:"Weak Topics",     trend:weakTopicsLabel,     up:false },
   ];
   const glows = ["rgba(124,58,237,.07)","rgba(163,230,53,.06)","rgba(251,191,36,.06)","rgba(244,63,94,.05)"];
   const gradients = ["var(--grad)","var(--grad2)","linear-gradient(135deg,#fbbf24,#f59e0b)","linear-gradient(135deg,#f43f5e,#a855f7)"];
 
   return (
     <div className="app-shell page-enter" style={{ position:"relative", zIndex:1 }}>
-      <Sidebar activePage="dashboard" onNav={onNav} username={username} />
+      <Sidebar activePage="dashboard" onNav={onNav} username={username} onLogout={onLogout} level={userLevel} streak={stats ? stats.streak : 0} />
       <main className="main-content">
         <div className="topbar">
           <div>
             <h1 style={{ fontFamily:"var(--display)", fontSize:21, fontWeight:800, letterSpacing:"-.4px" }}>Dashboard ⬡</h1>
-            <p style={{ color:"var(--muted)", fontSize:13, marginTop:2 }}>Good morning, {username}. Let's ship some code.</p>
+            <p style={{ color:"var(--muted)", fontSize:13, marginTop:2 }}>Good morning, {username || 'Developer'}. Let's ship some code.</p>
           </div>
           <div style={{ display:"flex", alignItems:"center", gap:12 }}>
             <div style={{ position:"relative", fontSize:18, cursor:"pointer" }}>🔔<div className="nd" style={{ position:"absolute", top:0, right:0, width:8, height:8, background:"var(--crim)", borderRadius:"50%", border:"2px solid var(--bg)", boxShadow:"0 0 8px var(--crim)" }} /></div>
-            <div className="avatar" style={{ width:30, height:30, fontSize:12 }}>{username.charAt(0).toUpperCase()}</div>
+            <div className="avatar" style={{ width:30, height:30, fontSize:12 }}>{(username && username.trim() ? username.charAt(0) : "D").toUpperCase()}</div>
           </div>
         </div>
 
+        {/* Fix #10 — backend error banner */}
+        {statsErr && (
+          <div style={{ margin:"0 32px 16px", padding:"12px 18px", background:"rgba(244,63,94,.08)", border:"1px solid rgba(244,63,94,.2)", borderRadius:12, color:"#f43f5e", fontSize:13, fontWeight:600 }}>
+            ⚠️ {statsErr}
+          </div>
+        )}
         <div className="stats-grid">
           {cards.map(({ icon, val, sfx, label, trend, up }, i) => (
             <div key={label} className="stat-card glass" style={{ boxShadow:`0 0 28px ${glows[i]}` }}>
@@ -642,7 +795,7 @@ const Dashboard = ({ onNav, username }) => {
               <span style={{ fontSize:13, color:"var(--p3)", cursor:"pointer", fontWeight:700 }} onClick={() => onNav("coding")}>See all →</span>
             </div>
             <div className="problems-list">
-              {[["Two Sum","Google","tag-e","Easy"],["Longest Substring","Amazon","tag-m","Medium"],["Word Break II","Meta","tag-h","Hard"],["Coin Change","Microsoft","tag-m","Medium"],["N-Queens","Netflix","tag-h","Hard"]].map(([name, co, tc, diff]) => (
+              {[["Two Sum","Google","tag-e","Easy"],["Reverse a String","Microsoft","tag-e","Easy"],["FizzBuzz","Apple","tag-e","Easy"]].map(([name, co, tc, diff]) => (
                 <div key={name} className="problem-row" onClick={() => onNav("coding")}>
                   <div>
                     <div style={{ fontSize:13, fontWeight:700 }}>{name}</div>
@@ -660,16 +813,70 @@ const Dashboard = ({ onNav, username }) => {
 };
 
 /* ─────────────────────────────────────────
+   PROBLEMS DATA
+───────────────────────────────────────── */
+const PROBLEMS = {
+  1: {
+    id: 1,
+    title: "Two Sum",
+    difficulty: "Easy",
+    diffClass: "tag-e",
+    companies: "Google · Amazon",
+    description: "Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.",
+    examples: [
+      { input: "nums = [2,7,11,15], target = 9", output: "[0,1]", explain: "nums[0] + nums[1] = 2 + 7 = 9" },
+      { input: "nums = [3,2,4], target = 6",      output: "[1,2]", explain: "nums[1] + nums[2] = 2 + 4 = 6" },
+    ],
+    starter: `def twoSum(nums, target):
+    # Write your solution here
+    pass`,
+  },
+  2: {
+    id: 2,
+    title: "Reverse a String",
+    difficulty: "Easy",
+    diffClass: "tag-e",
+    companies: "Microsoft · Facebook",
+    description: "Write a function that reverses a string. The input string is given as a list of characters s. You must do it in-place with O(1) extra memory.",
+    examples: [
+      { input: 's = ["h","e","l","l","o"]', output: '["o","l","l","e","h"]', explain: "Reverse the array in place" },
+      { input: 's = ["H","a","n","n","a","h"]', output: '["h","a","n","n","a","H"]', explain: "Reverse the array in place" },
+    ],
+    starter: `def reverseString(s):
+    # Write your solution here
+    pass`,
+  },
+  3: {
+    id: 3,
+    title: "FizzBuzz",
+    difficulty: "Easy",
+    diffClass: "tag-e",
+    companies: "Apple · Netflix",
+    description: 'Given an integer n, return a list of strings for numbers 1 to n. For multiples of 3 → "Fizz", multiples of 5 → "Buzz", both → "FizzBuzz".',
+    examples: [
+      { input: "n = 3",  output: '["1","2","Fizz"]',                          explain: "3 is divisible by 3" },
+      { input: "n = 5",  output: '["1","2","Fizz","4","Buzz"]',               explain: "5 is divisible by 5" },
+    ],
+    starter: `def fizzBuzz(n):
+    # Write your solution here
+    pass`,
+  },
+};
+
+/* ─────────────────────────────────────────
    CODING PAGE
 ───────────────────────────────────────── */
-const CodingPage = ({ onNav, username }) => {
-  const [timer, setTimer] = useState(0);
-  const [timerOn, setTimerOn] = useState(false);
+const CodingPage = ({ onNav, username, onLogout, userLevel = 1, userStreak = 0 }) => {
+  const [timer, setTimer]       = useState(0);
+  const [timerOn, setTimerOn]   = useState(false);
   const [activeTab, setActiveTab] = useState("problem");
-  const [result, setResult] = useState(null);
+  const [result, setResult]     = useState(null);
   const [aiResult, setAiResult] = useState(null);
-  const [running, setRunning] = useState(false);
+  const [running, setRunning]   = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [language,  setLanguage]  = useState("python");
+  const [problemId, setProblemId] = useState(1);
+  const [code, setCode]           = useState(PROBLEMS[1].starter);
   const toast = React.useContext(ToastContext);
   const ivRef = useRef(null);
 
@@ -685,40 +892,88 @@ const CodingPage = ({ onNav, username }) => {
   useEffect(() => () => clearInterval(ivRef.current), []);
   const fmt = (s) => `${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`;
 
-  const runCode = () => {
+  const runCode = async () => {
+    if (!code.trim()) { toast("⚠️ Write some code first!", "#f43f5e"); return; }
     setRunning(true);
+    setResult(null);
     toast("▶ Running test cases…", "#818cf8");
-    setTimeout(() => {
+    try {
+      const data = await apiCall("/code/run/", "POST", {
+        code:       code,
+        language:   language,
+        problem_id: problemId,
+      }, true);
+
+      setResult(data);
+
+      const allPassed = data.results && data.results.every(r => r.passed);
+      if (allPassed) {
+        toast("✅ All test cases passed!", "#a3e635");
+      } else {
+        const failed = data.results ? data.results.filter(r => !r.passed).length : 0;
+        toast(`❌ ${failed} test case(s) failed`, "#f43f5e");
+      }
+    } catch (err) {
+      // Fix #10 — show real error
+      setResult({ error: err.message || "Could not connect to backend" });
+      toast("⚠️ " + (err.message || "Backend error"), "#f43f5e");
+    } finally {
       setRunning(false);
-      setResult("pass");
-      toast("✅ All test cases passed!", "#a3e635");
-    }, 1200);
+    }
   };
 
-  const submitCode = () => {
+  const submitCode = async () => {
+    if (!code.trim()) { toast("⚠️ Write some code first!", "#f43f5e"); return; }
     setSubmitting(true);
+    setAiResult(null);
     toast("⚡ Submitting solution…", "#a855f7");
-    setTimeout(() => {
+    try {
+      const data = await apiCall("/code/submit/", "POST", {
+        code:       code,
+        language:   language,
+        problem_id: problemId,
+      }, true);
+
+      setAiResult(data);
+
+      if (data.status === "Accepted") {
+        toast(`🎉 Accepted! Score: ${data.score}/100`, "#a855f7");
+      } else {
+        toast(`❌ ${data.status || "Wrong Answer"}`, "#f43f5e");
+      }
+    } catch (err) {
+      setAiResult({ error: err.message || "Could not connect to backend" });
+      toast("⚠️ " + (err.message || "Backend error"), "#f43f5e");
+    } finally {
       setSubmitting(false);
-      setAiResult(true);
-      toast("🎉 Accepted! Score: 94/100", "#a855f7");
-    }, 1700);
+    }
   };
 
   return (
     <div className="app-shell page-enter" style={{ position:"relative", zIndex:1 }}>
-      <Sidebar activePage="coding" onNav={onNav} username={username} />
+      <Sidebar activePage="coding" onNav={onNav} username={username} onLogout={onLogout} level={userLevel} streak={userStreak} />
       <main className="main-content" style={{ display:"flex", flexDirection:"column", padding:0, overflow:"hidden" }}>
         {/* Coding bar */}
         <div className="coding-bar">
           <button className="btn btn-ghost btn-sm" onClick={() => onNav("dashboard")}>← Back</button>
-          <select className="select-input">
-            <option>Two Sum</option>
-            <option>Longest Substring Without Repeating Chars</option>
-            <option>Coin Change</option>
+          <select
+            className="select-input"
+            value={problemId}
+            onChange={e => {
+              const pid = Number(e.target.value);
+              setProblemId(pid);
+              setResult(null);
+              setAiResult(null);
+              setActiveTab("problem");
+              setCode(PROBLEMS[pid].starter);
+            }}
+          >
+            <option value={1}>Two Sum</option>
+            <option value={2}>Reverse a String</option>
+            <option value={3}>FizzBuzz</option>
           </select>
-          <span className="tag tag-e">Easy</span>
-          <span style={{ fontSize:12, color:"var(--muted)", fontFamily:"var(--mono)" }}>Google · Amazon</span>
+          <span className={`tag ${PROBLEMS[problemId].diffClass}`}>{PROBLEMS[problemId].difficulty}</span>
+          <span style={{ fontSize:12, color:"var(--muted)", fontFamily:"var(--mono)" }}>{PROBLEMS[problemId].companies}</span>
           <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:8 }}>
             <span className="timer-display">⏱ {fmt(timer)}</span>
             <button className="btn btn-ghost btn-sm" onClick={toggleTimer}>{timerOn ? "⏸" : "▶"} {timerOn ? "Pause" : "Start"}</button>
@@ -738,29 +993,22 @@ const CodingPage = ({ onNav, username }) => {
             </div>
             <div className="problem-body">
               {activeTab === "problem" && <>
-                <h2 style={{ fontFamily:"var(--display)", fontSize:20, fontWeight:800, marginBottom:12, letterSpacing:"-.5px" }}>1. Two Sum</h2>
+                <h2 style={{ fontFamily:"var(--display)", fontSize:20, fontWeight:800, marginBottom:12, letterSpacing:"-.5px" }}>{problemId}. {PROBLEMS[problemId].title}</h2>
                 <div style={{ display:"flex", gap:8, marginBottom:18 }}>
-                  <span className="tag tag-e">Easy</span>
-                  <span className="problem-tag">Array</span>
-                  <span className="problem-tag">Hash Table</span>
+                  <span className={`tag ${PROBLEMS[problemId].diffClass}`}>{PROBLEMS[problemId].difficulty}</span>
+                  <span className="problem-tag">{PROBLEMS[problemId].companies}</span>
                 </div>
-                <p style={{ color:"#5a5a8a", fontSize:14, lineHeight:1.8, marginBottom:12 }}>Given an array of integers <span className="code-tag">nums</span> and an integer <span className="code-tag">target</span>, return <em style={{ color:"var(--p3)", fontStyle:"normal" }}>indices of the two numbers</em> such that they add up to target.</p>
-                <div className="example-block">
-                  <div className="example-label">Example 1</div>
-                  <pre style={{ fontFamily:"var(--mono)", fontSize:12.5, lineHeight:1.8, color:"#5a5a8a" }}>{"Input:  nums = [2,7,11,15], target = 9\nOutput: [0,1]  ← 2 + 7 = 9"}</pre>
-                </div>
-                <div className="example-block" style={{ marginTop:12 }}>
-                  <div className="example-label">Example 2</div>
-                  <pre style={{ fontFamily:"var(--mono)", fontSize:12.5, lineHeight:1.8, color:"#5a5a8a" }}>{"Input:  nums = [3,2,4], target = 6\nOutput: [1,2]"}</pre>
-                </div>
-                <div className="constraints">
-                  <div style={{ fontSize:13, fontWeight:700, marginBottom:9 }}>Constraints</div>
-                  <ul style={{ paddingLeft:18, color:"var(--muted)", fontSize:13, lineHeight:1.9, fontFamily:"var(--mono)" }}>
-                    <li>2 ≤ nums.length ≤ 10⁴</li>
-                    <li>-10⁹ ≤ nums[i] ≤ 10⁹</li>
-                    <li>Only one valid answer exists.</li>
-                  </ul>
-                </div>
+                <p style={{ color:"#5a5a8a", fontSize:14, lineHeight:1.8, marginBottom:12 }}>{PROBLEMS[problemId].description}</p>
+                {PROBLEMS[problemId].examples.map((ex, i) => (
+                  <div className="example-block" key={i} style={{ marginTop: i > 0 ? 12 : 0 }}>
+                    <div className="example-label">Example {i+1}</div>
+                    <pre style={{ fontFamily:"var(--mono)", fontSize:12.5, lineHeight:1.8, color:"#5a5a8a" }}>
+                      {`Input:  ${ex.input}
+Output: ${ex.output}${ex.explain ? `
+// ${ex.explain}` : ""}`}
+                    </pre>
+                  </div>
+                ))}
               </>}
               {activeTab === "hints" && <>
                 <h3 style={{ marginBottom:16, fontFamily:"var(--display)" }} className="grad-text">💡 Hints</h3>
@@ -792,33 +1040,65 @@ const CodingPage = ({ onNav, username }) => {
               <div className="editor-header">
                 <div style={{ display:"flex", gap:8, alignItems:"center" }}>
                   <div className="dot dot-r" /><div className="dot dot-y" /><div className="dot dot-g" />
-                  <span style={{ fontSize:12, color:"var(--muted)", fontFamily:"var(--mono)", marginLeft:6 }}>solution.py</span>
+                  <span style={{ fontSize:12, color:"var(--muted)", fontFamily:"var(--mono)", marginLeft:6 }}>
+                    solution.{language === "python" ? "py" : language === "java" ? "java" : language === "cpp" ? "cpp" : "js"}
+                  </span>
                 </div>
-                <select className="select-input">
-                  <option>🐍 Python</option><option>☕ Java</option><option>⚡ C++</option><option>🟡 JS</option>
+                <select
+                  className="select-input"
+                  value={language}
+                  onChange={e => setLanguage(e.target.value)}
+                >
+                  <option value="python">🐍 Python</option>
+                  <option value="java">☕ Java</option>
+                  <option value="cpp">⚡ C++</option>
+                  <option value="javascript">🟡 JS</option>
                 </select>
               </div>
-              <div className="editor-content" contentEditable spellCheck={false}>
-                <span className="token-kw">class </span><span className="token-fn2">Solution</span>:<br/>
-                {"    "}<span className="token-kw">def </span><span className="token-fn2">twoSum</span><span style={{ color:"#5a5a8a" }}>(self, nums, target):</span><br/>
-                {"        "}<span className="token-cm"># Your solution here</span><br/>
-                {"        "}<span style={{ color:"#5a5a8a" }}>seen = {"{}"}</span><br/>
-                {"        "}<span className="token-kw">for </span><span className="token-fn">i, num </span><span className="token-kw">in </span><span className="token-fn2">enumerate</span><span style={{ color:"#5a5a8a" }}>(nums):</span><br/>
-                {"            "}<span className="token-fn">complement</span><span style={{ color:"#5a5a8a" }}> = target - num</span><br/>
-                {"            "}<span className="token-kw">if </span><span className="token-fn">complement </span><span className="token-kw">in </span><span style={{ color:"#5a5a8a" }}>seen:</span><br/>
-                {"                "}<span className="token-kw">return </span><span style={{ color:"#5a5a8a" }}>[seen[complement], i]</span><br/>
-                {"            "}<span style={{ color:"#5a5a8a" }}>seen[num] = i</span><br/>
-                {"        "}<span className="token-kw">return </span><span style={{ color:"#5a5a8a" }}>[]</span><span className="cursor-blink" />
-              </div>
+              {/* Real textarea connected to code state */}
+              <textarea
+                value={code}
+                onChange={e => setCode(e.target.value)}
+                spellCheck={false}
+                style={{
+                  flex: 1,
+                  background: "transparent",
+                  border: "none",
+                  outline: "none",
+                  color: "#c4b5fd",
+                  fontFamily: "var(--mono)",
+                  fontSize: 14,
+                  lineHeight: 1.8,
+                  padding: "20px 24px",
+                  resize: "none",
+                  width: "100%",
+                  minHeight: 260,
+                  tabSize: 4,
+                }}
+                onKeyDown={e => {
+                  // Tab key inserts 4 spaces instead of switching focus
+                  if (e.key === "Tab") {
+                    e.preventDefault();
+                    const start = e.target.selectionStart;
+                    const end   = e.target.selectionEnd;
+                    const spaces = "    ";
+                    setCode(code.substring(0, start) + spaces + code.substring(end));
+                    setTimeout(() => e.target.setSelectionRange(start + 4, start + 4), 0);
+                  }
+                }}
+                placeholder="Write your solution here..."
+              />
               <div className="editor-footer">
-                <span style={{ fontFamily:"var(--mono)", fontSize:11, color:"var(--muted)" }}>Python 3 · UTF-8 · Ln 9</span>
+                <span style={{ fontFamily:"var(--mono)", fontSize:11, color:"var(--muted)" }}>
+                  {language === "python" ? "Python 3" : language} · UTF-8 · {code.split("\n").length} lines
+                </span>
                 <div style={{ display:"flex", gap:8 }}>
                   <button className="btn btn-ghost btn-sm" onClick={() => toast("⚡ Formatted!", "#818cf8")}>⚡ Format</button>
                   <button className="btn btn-outline btn-sm" onClick={runCode} disabled={running}>
-                    {running ? "Running…" : "▶ Run"}
+                    {running ? "⏳ Running…" : "▶ Run"}
                   </button>
                   <button className="btn btn-primary btn-sm" onClick={submitCode} disabled={submitting}>
-                    {submitting ? "Submitting…" : "⚡ Submit"}
+                    {submitting ? "⏳ Submitting…" : "⚡ Submit"}
                   </button>
                 </div>
               </div>
@@ -841,36 +1121,66 @@ const CodingPage = ({ onNav, username }) => {
                   <span style={{ fontSize:12, color:"var(--muted)", fontFamily:"var(--mono)", minWidth:70 }}>target =</span>
                   <code style={{ background:"rgba(124,58,237,.08)", padding:"3px 10px", borderRadius:6, fontFamily:"var(--mono)", fontSize:12, color:"var(--p3)" }}>9</code>
                 </div>
-                {result === "pass" && (
-                  <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
-                    {["Case 1: Passed → [0,1]","Case 2: Passed → [1,2]","Case 3: Passed → [0,1]"].map(r => (
-                      <div key={r} style={{ display:"flex", gap:8, fontSize:13, alignItems:"center" }}>
-                        <span style={{ color:"var(--acid)", fontWeight:700 }}>✅</span>
-                        <span style={{ color:"var(--acid)", fontFamily:"var(--mono)" }}>{r}</span>
+                {/* Fix #4 — show real test case results from backend */}
+                {result && result.error && (
+                  <div style={{ padding:"10px 14px", background:"rgba(244,63,94,.08)", border:"1px solid rgba(244,63,94,.2)", borderRadius:10, color:"#f43f5e", fontSize:13, fontWeight:600 }}>
+                    ⚠️ {result.error}
+                  </div>
+                )}
+                {result && result.results && (
+                  <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                    {result.results.map((r, i) => (
+                      <div key={i} style={{ display:"flex", gap:8, fontSize:13, alignItems:"center", padding:"6px 10px", background: r.passed ? "rgba(163,230,53,.06)" : "rgba(244,63,94,.06)", borderRadius:8, border: r.passed ? "1px solid rgba(163,230,53,.15)" : "1px solid rgba(244,63,94,.15)" }}>
+                        <span style={{ fontWeight:700 }}>{r.passed ? "✅" : "❌"}</span>
+                        <span style={{ fontFamily:"var(--mono)", color: r.passed ? "var(--acid)" : "#f43f5e" }}>
+                          Case {i+1}: {r.passed ? "Passed" : "Failed"}
+                          {r.output ? ` → ${r.output}` : ""}
+                          {!r.passed && r.expected ? ` (expected: ${r.expected})` : ""}
+                        </span>
                       </div>
                     ))}
-                    <div style={{ fontSize:12, color:"var(--muted)", fontFamily:"var(--mono)", marginTop:4 }}>Runtime: 41ms · Memory: 14.1 MB</div>
+                    {result.runtime && (
+                      <div style={{ fontSize:12, color:"var(--muted)", fontFamily:"var(--mono)", marginTop:4 }}>
+                        Runtime: {result.runtime} · Memory: {result.memory || "N/A"}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
             </div>
 
             {/* AI panel */}
+            {/* Fix #5 & #6 — show real submit results from backend */}
             {aiResult && (
               <div className="ai-panel">
                 <div className="ai-panel-head">
-                  <span style={{ fontWeight:700 }}>🤖 AI Code Analysis</span>
-                  <div className="ai-score-pill">✦ Score: 94/100</div>
+                  <span style={{ fontWeight:700 }}>🤖 Submission Result</span>
+                  {aiResult.score !== undefined && (
+                    <div className="ai-score-pill">✦ Score: {aiResult.score}/100</div>
+                  )}
                   <button style={{ background:"none", border:"none", color:"var(--muted)", fontSize:20, cursor:"pointer", marginLeft:8 }} onClick={() => setAiResult(null)}>×</button>
                 </div>
-                <div className="ai-grid">
-                  {[["⏱ Time","O(n) ✅","var(--acid)"],["💾 Space","O(n) ✅","var(--acid)"],["🧪 Tests","142/142 ✅","var(--acid)"],["📊 Beats","89% Python","var(--p3)"],["💡 Tip","Add type hints","var(--muted)"],["✦ Rating","✦✦✦✦","var(--p2)"]].map(([l, v, c]) => (
-                    <div key={l} className="ai-item">
-                      <div className="ai-item-label">{l}</div>
-                      <div className="ai-item-val" style={{ color:`var(--${c.replace("var(--","").replace(")","")})` || c }}>{v}</div>
-                    </div>
-                  ))}
-                </div>
+                {aiResult.error ? (
+                  <div style={{ padding:"12px 16px", color:"#f43f5e", fontSize:13, fontWeight:600 }}>
+                    ⚠️ {aiResult.error}
+                  </div>
+                ) : (
+                  <div className="ai-grid">
+                    {[
+                      ["🏆 Status",  aiResult.status   || "N/A",                            aiResult.status === "Accepted" ? "#a3e635" : "#f43f5e"],
+                      ["⏱ Runtime",  aiResult.runtime  || "N/A",                            "#a3e635"],
+                      ["💾 Memory",  aiResult.memory   || "N/A",                            "#a3e635"],
+                      ["🧪 Tests",   aiResult.passed !== undefined ? `${aiResult.passed}/${aiResult.total}` : "N/A", "#a3e635"],
+                      ["💡 Tip",     aiResult.feedback || "Keep practicing!",               "var(--muted)"],
+                      ["📊 Score",   aiResult.score !== undefined ? `${aiResult.score}/100` : "N/A", "#a855f7"],
+                    ].map(([l, v, c]) => (
+                      <div key={l} className="ai-item">
+                        <div className="ai-item-label">{l}</div>
+                        <div className="ai-item-val" style={{ color: c }}>{v}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -883,10 +1193,28 @@ const CodingPage = ({ onNav, username }) => {
 /* ─────────────────────────────────────────
    ANALYTICS
 ───────────────────────────────────────── */
-const Analytics = ({ onNav, username }) => {
-  const lineRef = useRef(null);
-  const barRef  = useRef(null);
+const Analytics = ({ onNav, username, onLogout, userLevel = 1, userStreak = 0 }) => {
+  const lineRef  = useRef(null);
+  const barRef   = useRef(null);
   const donutRef = useRef(null);
+  const [stats, setStats]     = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch real stats from backend
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const data = await apiCall("/dashboard/", "GET", null, true);
+        setStats(data);
+      } catch (err) {
+        setStats(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchStats();
+  }, []);
+
   useEffect(() => {
     if (!window.Chart) return;
     const opts = {
@@ -901,20 +1229,23 @@ const Analytics = ({ onNav, username }) => {
     if (lineRef.current) {
       const g = lineRef.current.getContext("2d").createLinearGradient(0,0,0,260);
       g.addColorStop(0,"rgba(124,58,237,.25)"); g.addColorStop(1,"rgba(124,58,237,.01)");
-      charts.push(new window.Chart(lineRef.current, { type:"line", data:{ labels:["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], datasets:[{ data:[7,4,9,12,6,3,8], borderColor:"#a855f7", borderWidth:2.5, backgroundColor:g, pointBackgroundColor:"#a3e635", pointBorderColor:"#04040a", pointRadius:5, tension:.42, fill:true }] }, options:opts }));
+      const solved = stats ? stats.problems_solved : 0;
+      charts.push(new window.Chart(lineRef.current, { type:"line", data:{ labels:["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], datasets:[{ data:[0,0,0,0,0,0,solved], borderColor:"#a855f7", borderWidth:2.5, backgroundColor:g, pointBackgroundColor:"#a3e635", pointBorderColor:"#04040a", pointRadius:5, tension:.42, fill:true }] }, options:opts }));
     }
     if (barRef.current) {
-      charts.push(new window.Chart(barRef.current, { type:"bar", data:{ labels:["Easy","Medium","Hard"], datasets:[{ data:[94,78,55], backgroundColor:["rgba(163,230,53,.5)","rgba(251,191,36,.5)","rgba(244,63,94,.5)"], borderColor:["#a3e635","#fbbf24","#f43f5e"], borderWidth:2, borderRadius:8, borderSkipped:false }] }, options:{...opts, scales:{...opts.scales, y:{...opts.scales.y, max:100}}} }));
+      const acc = stats ? stats.accuracy : 0;
+      charts.push(new window.Chart(barRef.current, { type:"bar", data:{ labels:["Easy","Medium","Hard"], datasets:[{ data:[acc,0,0], backgroundColor:["rgba(163,230,53,.5)","rgba(251,191,36,.5)","rgba(244,63,94,.5)"], borderColor:["#a3e635","#fbbf24","#f43f5e"], borderWidth:2, borderRadius:8, borderSkipped:false }] }, options:{...opts, scales:{...opts.scales, y:{...opts.scales.y, max:100}}} }));
     }
     if (donutRef.current) {
-      charts.push(new window.Chart(donutRef.current, { type:"doughnut", data:{ labels:["Arrays","Strings","Trees","DP","Graphs","Other"], datasets:[{ data:[30,20,18,14,10,8], backgroundColor:["rgba(124,58,237,.7)","rgba(168,85,247,.7)","rgba(163,230,53,.7)","rgba(251,191,36,.7)","rgba(244,63,94,.7)","rgba(82,82,110,.7)"], borderWidth:0, hoverOffset:6, borderRadius:3 }] }, options:{ responsive:true, maintainAspectRatio:false, cutout:"68%", plugins:{ legend:{ position:"right", labels:{ color:"#52526e", font:{size:11,family:"JetBrains Mono"}, boxWidth:11, padding:12 } }, tooltip:{ backgroundColor:"#111118", borderColor:"#a855f7", borderWidth:1, bodyColor:"#8888aa", padding:10 } } } }));
+      const ps = stats ? stats.problems_solved : 0;
+      charts.push(new window.Chart(donutRef.current, { type:"doughnut", data:{ labels:["Arrays","Strings","Trees","DP","Graphs","Other"], datasets:[{ data:[ps,0,0,0,0,0], backgroundColor:["rgba(124,58,237,.7)","rgba(168,85,247,.7)","rgba(163,230,53,.7)","rgba(251,191,36,.7)","rgba(244,63,94,.7)","rgba(82,82,110,.7)"], borderWidth:0, hoverOffset:6, borderRadius:3 }] }, options:{ responsive:true, maintainAspectRatio:false, cutout:"68%", plugins:{ legend:{ position:"right", labels:{ color:"#52526e", font:{size:11,family:"JetBrains Mono"}, boxWidth:11, padding:12 } }, tooltip:{ backgroundColor:"#111118", borderColor:"#a855f7", borderWidth:1, bodyColor:"#8888aa", padding:10 } } } }));
     }
     return () => charts.forEach(c => c.destroy());
-  }, []);
+  }, [stats]);
 
   return (
     <div className="app-shell page-enter" style={{ position:"relative", zIndex:1 }}>
-      <Sidebar activePage="analytics" onNav={onNav} username={username} />
+      <Sidebar activePage="analytics" onNav={onNav} username={username} onLogout={onLogout} level={userLevel} streak={userStreak} />
       <main className="main-content">
         <div className="topbar">
           <div>
@@ -922,6 +1253,30 @@ const Analytics = ({ onNav, username }) => {
             <p style={{ color:"var(--muted)", fontSize:13, marginTop:2 }}>Track every bit of progress</p>
           </div>
         </div>
+
+        {/* Real user summary bar */}
+        {stats && (
+          <div style={{ display:"flex", gap:16, padding:"0 32px 24px", flexWrap:"wrap" }}>
+            {[
+              { icon:"🎯", label:"Accuracy",        val: `${stats.accuracy}%`        },
+              { icon:"✅", label:"Problems Solved",  val: stats.problems_solved       },
+              { icon:"⭐", label:"Day Streak",       val: stats.streak                },
+              { icon:"🏆", label:"Level",            val: `Level ${stats.level}`      },
+            ].map(({ icon, label, val }) => (
+              <div key={label} className="glass" style={{ padding:"14px 22px", borderRadius:14, display:"flex", alignItems:"center", gap:12, flex:1, minWidth:140 }}>
+                <span style={{ fontSize:22 }}>{icon}</span>
+                <div>
+                  <div style={{ fontSize:18, fontWeight:800, fontFamily:"var(--mono)" }} className="grad-text">{val}</div>
+                  <div style={{ fontSize:11, color:"var(--muted)", marginTop:2 }}>{label}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {loading && (
+          <div style={{ padding:"0 32px 24px", color:"var(--muted)", fontSize:13 }}>⏳ Loading your stats…</div>
+        )}
+
         <div className="analytics-grid">
           <div className="analytics-card glass span2">
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:18 }}>
@@ -941,7 +1296,10 @@ const Analytics = ({ onNav, username }) => {
           <div className="analytics-card glass">
             <h3 style={{ fontFamily:"var(--display)", fontSize:15, fontWeight:700, marginBottom:18 }}>🧠 Topic Performance</h3>
             <div className="topic-bars">
-              {[["Arrays",92,"var(--grad)","var(--p3)"],["Strings",85,"var(--grad)","var(--p3)"],["Trees",74,"linear-gradient(135deg,#fbbf24,#f59e0b)","#fbbf24"],["Graphs",52,"linear-gradient(135deg,#f43f5e,#a855f7)","#f43f5e"],["DP",41,"linear-gradient(135deg,#f43f5e,#a855f7)","#f43f5e"],["Tries",38,"linear-gradient(135deg,#f43f5e,#a855f7)","#f43f5e"]].map(([n,p,g,c]) => (
+              {(stats && stats.problems_solved > 0
+                ? [["Arrays",stats.accuracy,"var(--grad)","var(--p3)"],["Strings",0,"var(--grad)","var(--p3)"],["Trees",0,"linear-gradient(135deg,#fbbf24,#f59e0b)","#fbbf24"],["Graphs",0,"linear-gradient(135deg,#f43f5e,#a855f7)","#f43f5e"],["DP",0,"linear-gradient(135deg,#f43f5e,#a855f7)","#f43f5e"],["Tries",0,"linear-gradient(135deg,#f43f5e,#a855f7)","#f43f5e"]]
+                : [["Arrays",0,"var(--grad)","var(--p3)"],["Strings",0,"var(--grad)","var(--p3)"],["Trees",0,"linear-gradient(135deg,#fbbf24,#f59e0b)","#fbbf24"],["Graphs",0,"linear-gradient(135deg,#f43f5e,#a855f7)","#f43f5e"],["DP",0,"linear-gradient(135deg,#f43f5e,#a855f7)","#f43f5e"],["Tries",0,"linear-gradient(135deg,#f43f5e,#a855f7)","#f43f5e"]]
+              ).map(([n,p,g,c]) => (
                 <div key={n} className="topic-row">
                   <span className="topic-name">{n}</span>
                   <div className="topic-bar-bg"><div className="topic-bar-fill" style={{ width:`${p}%`, background:g }} /></div>
@@ -953,7 +1311,10 @@ const Analytics = ({ onNav, username }) => {
           <div className="analytics-card glass">
             <h3 style={{ fontFamily:"var(--display)", fontSize:15, fontWeight:700, marginBottom:18 }}>📅 Weekly Activity</h3>
             <div className="week-bars">
-              {[["Mon",70,false],["Tue",40,false],["Wed",90,false],["Thu",100,true],["Fri",60,false],["Sat",30,false],["Sun",50,false]].map(([d,h,peak]) => (
+              {(stats && stats.problems_solved > 0
+                ? [["Mon",0,false],["Tue",0,false],["Wed",0,false],["Thu",0,false],["Fri",0,false],["Sat",0,false],["Sun",stats.problems_solved * 10,true]]
+                : [["Mon",0,false],["Tue",0,false],["Wed",0,false],["Thu",0,false],["Fri",0,false],["Sat",0,false],["Sun",0,false]]
+              ).map(([d,h,peak]) => (
                 <div key={d} className="week-col">
                   <span className="week-day">{d}</span>
                   <div className={`week-bar${peak?" peak":""}`} style={{ height:`${h}%` }} />
@@ -971,28 +1332,83 @@ const Analytics = ({ onNav, username }) => {
 /* ─────────────────────────────────────────
    INTERVIEW PAGE
 ───────────────────────────────────────── */
-const Interview = ({ onNav, username }) => {
+const Interview = ({ onNav, username, onLogout, userLevel = 1, userStreak = 0 }) => {
   const [progress, setProgress] = useState(0);
-  const [step, setStep] = useState("");
-  const [done, setDone] = useState(false);
-  const [drag, setDrag] = useState(false);
+  const [step, setStep]         = useState("");
+  const [done, setDone]         = useState(false);
+  const [drag, setDrag]         = useState(false);
+  const [skills, setSkills]     = useState({});
+  const [questions, setQuestions] = useState([]);
+  const [resumeErr, setResumeErr] = useState("");
   const toast = React.useContext(ToastContext);
 
-  const processResume = () => {
+  const processResume = async (file) => {
+    if (!file) return;
+    if (!file.name.endsWith(".pdf")) {
+      toast("⚠️ Only PDF files supported", "#f43f5e");
+      return;
+    }
+
+    setResumeErr("");
+    setDone(false);
+    setSkills({});
+    setQuestions([]);
+
+    // Animate progress bar while uploading
     const steps = ["Parsing document…","Extracting skills…","Generating questions…","Done! ✦"];
     let w = 0, si = 0;
     setProgress(0); setStep(steps[0]);
     const iv = setInterval(() => {
-      w = Math.min(w + 2.5, 100);
+      w = Math.min(w + 1.5, 90); // stop at 90 until API responds
       setProgress(w);
       if (w >= 25 * (si + 1) && si < 3) { si++; setStep(steps[si]); }
-      if (w >= 100) { clearInterval(iv); setTimeout(() => { setDone(true); toast("✦ Resume analyzed! 14 skills detected", "#a3e635"); }, 400); }
-    }, 50);
+    }, 40);
+
+    try {
+      const token = localStorage.getItem("skillx_token");
+      const formData = new FormData();
+      formData.append("resume", file);
+
+      const res = await fetch("http://localhost:8000/api/resume/upload/", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}` },
+        body: formData,
+      });
+
+      const data = await res.json();
+      clearInterval(iv);
+
+      if (!res.ok) {
+        setResumeErr(data.error || "Failed to analyze resume");
+        setProgress(0);
+        setStep("");
+        toast("⚠️ " + (data.error || "Failed"), "#f43f5e");
+        return;
+      }
+
+      setProgress(100);
+      setStep("Done! ✦");
+      setSkills(data.skills || {});
+      setQuestions(data.questions || []);
+
+      const totalSkills = Object.values(data.skills || {}).flat().length;
+      setTimeout(() => {
+        setDone(true);
+        toast(`✦ Resume analyzed! ${totalSkills} skills detected`, "#a3e635");
+      }, 400);
+
+    } catch (err) {
+      clearInterval(iv);
+      setProgress(0);
+      setStep("");
+      setResumeErr("Could not connect to backend");
+      toast("⚠️ Backend error", "#f43f5e");
+    }
   };
 
   return (
     <div className="app-shell page-enter" style={{ position:"relative", zIndex:1 }}>
-      <Sidebar activePage="interview" onNav={onNav} username={username} />
+      <Sidebar activePage="interview" onNav={onNav} username={username} onLogout={onLogout} level={userLevel} streak={userStreak} />
       <main className="main-content">
         <div className="topbar">
           <div>
@@ -1002,12 +1418,14 @@ const Interview = ({ onNav, username }) => {
         </div>
         <div className="interview-grid">
           {/* Upload zone */}
-          <div className={`upload-zone${drag?" dragover":""}`} onDragOver={e=>{e.preventDefault();setDrag(true)}} onDragLeave={()=>setDrag(false)} onDrop={e=>{e.preventDefault();setDrag(false);processResume();}}>
+          <div className={`upload-zone${drag?" dragover":""}`} onDragOver={e=>{e.preventDefault();setDrag(true)}} onDragLeave={()=>setDrag(false)} onDrop={e=>{e.preventDefault();setDrag(false); const f=e.dataTransfer.files[0]; if(f) processResume(f);}}>
             <div className="upload-icon">📄</div>
             <h3 style={{ fontFamily:"var(--display)", fontSize:19, fontWeight:700, marginBottom:8 }}>Upload Your Resume</h3>
             <p style={{ color:"var(--muted)", fontSize:14, marginBottom:24 }}>Drag & drop or click to upload PDF or DOCX</p>
-            <input type="file" id="resume-file" accept=".pdf,.docx" style={{ display:"none" }} onChange={processResume} />
+            <input type="file" id="resume-file" accept=".pdf" style={{ display:"none" }}
+              onChange={e => { if (e.target.files[0]) processResume(e.target.files[0]); }} />
             <button className="btn btn-primary" onClick={() => document.getElementById("resume-file").click()}>Choose File</button>
+            {resumeErr && <div style={{ marginTop:12, color:"#f43f5e", fontSize:13, fontWeight:600 }}>⚠️ {resumeErr}</div>}
             {progress > 0 && !done && (
               <div className="progress-wrap">
                 <div className="progress-bar-bg"><div className="progress-bar-fill" style={{ width:`${progress}%` }} /></div>
@@ -1029,12 +1447,16 @@ const Interview = ({ onNav, username }) => {
               </div>
             ) : (
               <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-                {[["Languages",["Python","Java","JavaScript","C++"]],["Frameworks",["React","Spring Boot","Node.js"]],["Cloud & Tools",["Docker","AWS","Kubernetes","Git"]],["Databases",["PostgreSQL","MongoDB","Redis"]]].map(([cat, tags]) => (
-                  <div key={cat}>
-                    <div style={{ fontSize:11, fontWeight:700, color:"var(--muted)", letterSpacing:"1.2px", textTransform:"uppercase", marginBottom:8, fontFamily:"var(--mono)" }}>{cat}</div>
-                    <div className="skill-tags">{tags.map(t => <span key={t} className="skill-tag">{t}</span>)}</div>
-                  </div>
-                ))}
+                {Object.keys(skills).length > 0 ? (
+                  Object.entries(skills).map(([cat, tags]) => (
+                    <div key={cat}>
+                      <div style={{ fontSize:11, fontWeight:700, color:"var(--muted)", letterSpacing:"1.2px", textTransform:"uppercase", marginBottom:8, fontFamily:"var(--mono)" }}>{cat}</div>
+                      <div className="skill-tags">{tags.map(t => <span key={t} className="skill-tag">{t}</span>)}</div>
+                    </div>
+                  ))
+                ) : (
+                  <div style={{ color:"var(--muted)", fontSize:13 }}>No skills detected. Try a different resume.</div>
+                )}
               </div>
             )}
           </div>
@@ -1052,18 +1474,23 @@ const Interview = ({ onNav, username }) => {
               </div>
             ) : (
               <div className="questions-list">
-                {[["Docker containers vs VMs — how have you used Docker in production?","Docker","tag-m"],["Design a scalable REST API with Spring Boot — patterns you follow?","Spring Boot","tag-h"],["Optimise a slow PostgreSQL query — describe your indexing strategy.","PostgreSQL","tag-m"],["Implement a React hook that debounces API calls.","React","tag-e"]].map(([q, tag, tc], i) => (
-                  <div key={i} className="question-item">
-                    <div className="question-num">Q{i+1}</div>
-                    <div>
-                      <p style={{ fontSize:13, lineHeight:1.65, marginBottom:7, color:"#5a5a9a" }}>{q}</p>
-                      <div style={{ display:"flex", gap:6 }}>
-                        <span className="skill-tag" style={{ fontSize:11 }}>{tag}</span>
-                        <span className={`tag ${tc}`}>{tc==="tag-e"?"Easy":tc==="tag-m"?"Medium":"Hard"}</span>
+                {questions.length > 0 ? questions.map((q, i) => {
+                  const diffClass = q.difficulty === "Easy" ? "tag-e" : q.difficulty === "Hard" ? "tag-h" : "tag-m";
+                  return (
+                    <div key={i} className="question-item">
+                      <div className="question-num">Q{i+1}</div>
+                      <div>
+                        <p style={{ fontSize:13, lineHeight:1.65, marginBottom:7, color:"#5a5a9a" }}>{q.question}</p>
+                        <div style={{ display:"flex", gap:6 }}>
+                          <span className="skill-tag" style={{ fontSize:11 }}>{q.skill}</span>
+                          <span className={`tag ${diffClass}`}>{q.difficulty}</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                }) : (
+                  <div style={{ color:"var(--muted)", fontSize:13 }}>No questions generated.</div>
+                )}
               </div>
             )}
           </div>
@@ -1078,10 +1505,12 @@ const Interview = ({ onNav, username }) => {
                 <div key={l} className="mock-feat"><span>{ic}</span>{l}</div>
               ))}
             </div>
-            <button className="btn btn-acid btn-xl" disabled={!done} onClick={() => { toast("🎤 Starting mock interview…", "#a855f7"); setTimeout(() => onNav("coding"), 1200); }}>
-              Start Mock Interview →
+            <button className="btn btn-acid btn-xl" disabled style={{ opacity:0.5, cursor:"not-allowed" }}>
+              🚧 Coming Soon
             </button>
-            {!done && <p style={{ color:"var(--muted)", fontSize:13, marginTop:12 }}>Upload your resume first to enable</p>}
+            <p style={{ color:"var(--muted)", fontSize:13, marginTop:12 }}>
+              {done ? "Mock interview feature launching soon!" : "Upload your resume first to extract skills"}
+            </p>
           </div>
         </div>
       </main>
@@ -1093,28 +1522,79 @@ const Interview = ({ onNav, username }) => {
    ROOT APP
 ───────────────────────────────────────── */
 export default function App() {
-  const [page, setPage] = useState("landing");
-  const [username, setUsername] = useState("Developer");
+  // FIX #9 — Restore page from localStorage on refresh
+  const [page, setPage] = useState(() => {
+    try {
+      const saved = localStorage.getItem("skillx_page");
+      const valid = ["dashboard","coding","analytics","interview"];
+      return valid.includes(saved) ? saved : "landing";
+    } catch(e) { return "landing"; }
+  });
 
-  const onAuth = (name) => setUsername(name);
-  const onNav  = (p) => { setPage(p); window.scrollTo(0, 0); };
+  // FIX #1 — Safe username, never null/undefined
+  const [username, setUsername] = useState(() => {
+    try {
+      const saved = localStorage.getItem("skillx_username");
+      return (saved && saved.trim()) ? saved.trim() : "";
+    } catch(e) { return ""; }
+  });
+  const [userLevel, setUserLevel] = useState(() => {
+    try { return Number(localStorage.getItem("skillx_level")) || 1; } catch(e) { return 1; }
+  });
+  const [userStreak, setUserStreak] = useState(() => {
+    try { return Number(localStorage.getItem("skillx_streak")) || 0; } catch(e) { return 0; }
+  });
+
+  // FIX #1 — Always a safe display name
+  const displayName = (username && username.trim()) ? username.trim() : "Developer";
+
+  // FIX #1 + #8 — Sanitize name, store safely
+  const onAuth = (name) => {
+    const safe = (name && name.trim()) ? name.trim() : "Developer";
+    setUsername(safe);
+    try { localStorage.setItem("skillx_username", safe); } catch(e) {}
+  };
+
+  // FIX #9 — Persist page on navigation
+  const onNav = (p) => {
+    setPage(p);
+    window.scrollTo(0, 0);
+    try {
+      const valid = ["dashboard","coding","analytics","interview"];
+      if (valid.includes(p)) {
+        localStorage.setItem("skillx_page", p);
+      } else {
+        localStorage.removeItem("skillx_page");
+      }
+    } catch(e) {}
+  };
+
+  // FIX #9 — Logout clears full session
+  const onLogout = () => {
+    try {
+      localStorage.removeItem("skillx_username");
+      localStorage.removeItem("skillx_page");
+      localStorage.removeItem("skillx_token"); // Fix #8 — clear JWT on logout
+    } catch(e) {}
+    setUsername("");
+    setPage("landing");
+  };
 
   const renderPage = () => {
     switch (page) {
       case "landing":   return <Landing onNav={onNav} />;
       case "login":     return <AuthPage mode="login"  onNav={onNav} onAuth={onAuth} />;
       case "signup":    return <AuthPage mode="signup" onNav={onNav} onAuth={onAuth} />;
-      case "dashboard": return <Dashboard onNav={onNav} username={username} />;
-      case "coding":    return <CodingPage onNav={onNav} username={username} />;
-      case "analytics": return <Analytics onNav={onNav} username={username} />;
-      case "interview": return <Interview onNav={onNav} username={username} />;
+      case "dashboard": return <Dashboard onNav={onNav} username={displayName} onLogout={onLogout} />;
+      case "coding":    return <CodingPage onNav={onNav} username={displayName} onLogout={onLogout} userLevel={userLevel} userStreak={userStreak} />;
+      case "analytics": return <Analytics  onNav={onNav} username={displayName} onLogout={onLogout} userLevel={userLevel} userStreak={userStreak} />;
+      case "interview": return <Interview  onNav={onNav} username={displayName} onLogout={onLogout} userLevel={userLevel} userStreak={userStreak} />;
       default:          return <Landing onNav={onNav} />;
     }
   };
 
   return (
     <ToastProvider>
-      
       <SkillXCanvas />
       {renderPage()}
     </ToastProvider>
