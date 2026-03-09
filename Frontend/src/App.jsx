@@ -18,20 +18,44 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 const API_BASE = "http://localhost:8000/api";
 
 const apiCall = async (endpoint, method = "GET", body = null, requiresAuth = false) => {
-  const headers = { "Content-Type": "application/json" };
+
+  const headers = {
+    "Content-Type": "application/json"
+  };
+
   if (requiresAuth) {
     const token = localStorage.getItem("skillx_token");
-    if (token) headers["Authorization"] = `Bearer ${token}`;
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
   }
-  const res = await fetch(`${API_BASE}${endpoint}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : null,
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || "Something went wrong");
-  return data;
+
+  try {
+
+    const res = await fetch(`${API_BASE}${endpoint}`, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : null
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || data.detail || "Server error");
+    }
+
+    return data;
+
+  } catch (err) {
+
+    console.error("API ERROR:", err);
+
+    throw err;
+
+  }
+
 };
+
 
 /* ─────────────────────────────────────────
    CANVAS: Plasma + Constellation + Particles
