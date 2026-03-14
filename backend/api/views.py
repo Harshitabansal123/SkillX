@@ -123,18 +123,69 @@ def get_progress(username):
 # ── Problem test cases ──
 PROBLEM_TESTS = {
     1: [
-        {"input": {"nums": [2,7,11,15], "target": 9},  "expected": [0,1], "type": "twosum"},
-        {"input": {"nums": [3,2,4],     "target": 6},  "expected": [1,2], "type": "twosum"},
-        {"input": {"nums": [3,3],       "target": 6},  "expected": [0,1], "type": "twosum"},
+        {"input": {"nums": [2,7,11,15], "target": 9}, "expected": [0,1], "type": "twosum"},
+        {"input": {"nums": [3,2,4],     "target": 6}, "expected": [1,2], "type": "twosum"},
+        {"input": {"nums": [3,3],       "target": 6}, "expected": [0,1], "type": "twosum"},
     ],
     2: [
         {"input": {"s": ["h","e","l","l","o"]},     "expected": ["o","l","l","e","h"],     "type": "reverse"},
         {"input": {"s": ["H","a","n","n","a","h"]}, "expected": ["h","a","n","n","a","H"], "type": "reverse"},
     ],
     3: [
-        {"input": {"n": 3},  "expected": ["1","2","Fizz"],                                                                                   "type": "fizzbuzz"},
-        {"input": {"n": 5},  "expected": ["1","2","Fizz","4","Buzz"],                                                                        "type": "fizzbuzz"},
-        {"input": {"n": 15}, "expected": ["1","2","Fizz","4","Buzz","Fizz","7","8","Fizz","Buzz","11","Fizz","13","14","FizzBuzz"],           "type": "fizzbuzz"},
+        {"input": {"n": 3},  "expected": ["1","2","Fizz"],  "type": "fizzbuzz"},
+        {"input": {"n": 5},  "expected": ["1","2","Fizz","4","Buzz"], "type": "fizzbuzz"},
+        {"input": {"n": 15}, "expected": ["1","2","Fizz","4","Buzz","Fizz","7","8","Fizz","Buzz","11","Fizz","13","14","FizzBuzz"], "type": "fizzbuzz"},
+    ],
+    4: [
+        {"input": {"x": 121},  "expected": True,  "type": "palindrome"},
+        {"input": {"x": -121}, "expected": False, "type": "palindrome"},
+        {"input": {"x": 10},   "expected": False, "type": "palindrome"},
+    ],
+    5: [
+        {"input": {"nums": [-2,1,-3,4,-1,2,1,-5,4]}, "expected": 6,  "type": "maxsubarray"},
+        {"input": {"nums": [1]},                       "expected": 1,  "type": "maxsubarray"},
+        {"input": {"nums": [5,4,-1,7,8]},              "expected": 23, "type": "maxsubarray"},
+    ],
+    6: [
+        {"input": {"s": "()"},     "expected": True,  "type": "validparen"},
+        {"input": {"s": "()[]{}"}, "expected": True,  "type": "validparen"},
+        {"input": {"s": "(]"},     "expected": False, "type": "validparen"},
+        {"input": {"s": "([)]"},   "expected": False, "type": "validparen"},
+    ],
+    7: [
+        {"input": {"n": 2}, "expected": 2, "type": "climbstairs"},
+        {"input": {"n": 3}, "expected": 3, "type": "climbstairs"},
+        {"input": {"n": 5}, "expected": 8, "type": "climbstairs"},
+    ],
+    8: [
+        {"input": {"prices": [7,1,5,3,6,4]}, "expected": 5, "type": "maxprofit"},
+        {"input": {"prices": [7,6,4,3,1]},   "expected": 0, "type": "maxprofit"},
+        {"input": {"prices": [1,2]},          "expected": 1, "type": "maxprofit"},
+    ],
+    9: [
+        {"input": {"nums": [3,0,1]},   "expected": 2, "type": "missingnum"},
+        {"input": {"nums": [0,1]},     "expected": 2, "type": "missingnum"},
+        {"input": {"nums": [9,6,4,2,3,5,7,0,1]}, "expected": 8, "type": "missingnum"},
+    ],
+    10: [
+        {"input": {"s": "Hello World"}, "expected": 3, "type": "vowels"},
+        {"input": {"s": "Python"},      "expected": 1, "type": "vowels"},
+        {"input": {"s": "aeiou"},       "expected": 5, "type": "vowels"},
+    ],
+    11: [
+        {"input": {"n": 5}, "expected": 120, "type": "factorial"},
+        {"input": {"n": 0}, "expected": 1,   "type": "factorial"},
+        {"input": {"n": 7}, "expected": 5040,"type": "factorial"},
+    ],
+    12: [
+        {"input": {"nums": [3,1,4,1,5,9,2,6]}, "expected": 9,  "type": "findmax"},
+        {"input": {"nums": [-5,-3,-1,-4]},       "expected": -1, "type": "findmax"},
+        {"input": {"nums": [42]},                "expected": 42, "type": "findmax"},
+    ],
+    13: [
+        {"input": {"nums": [10,5,8,20,3]}, "expected": 10, "type": "secondlargest"},
+        {"input": {"nums": [5,5,5]},       "expected": -1, "type": "secondlargest"},
+        {"input": {"nums": [1,2]},         "expected": 1,  "type": "secondlargest"},
     ],
 }
 
@@ -148,6 +199,26 @@ def run_python_code(code, test_input, test_type):
             runner = f"import json\n{code}\ns={test_input['s']}\nreverseString(s)\nprint(json.dumps(s))"
         elif test_type == "fizzbuzz":
             runner = f"import json\n{code}\nprint(json.dumps(fizzBuzz({test_input['n']})))"
+        elif test_type == "palindrome":
+            runner = f"import json\n{code}\nprint(json.dumps(isPalindrome({test_input['x']})))"
+        elif test_type == "maxsubarray":
+            runner = f"import json\n{code}\nprint(json.dumps(maxSubArray({test_input['nums']})))"
+        elif test_type == "validparen":
+            runner = f"import json\n{code}\nprint(json.dumps(isValid({repr(test_input['s'])})))"
+        elif test_type == "climbstairs":
+            runner = f"import json\n{code}\nprint(json.dumps(climbStairs({test_input['n']})))"
+        elif test_type == "maxprofit":
+            runner = f"import json\n{code}\nprint(json.dumps(maxProfit({test_input['prices']})))"
+        elif test_type == "missingnum":
+            runner = f"import json\n{code}\nprint(json.dumps(missingNumber({test_input['nums']})))"
+        elif test_type == "vowels":
+            runner = f"import json\n{code}\nprint(json.dumps(countVowels({repr(test_input['s'])})))"
+        elif test_type == "factorial":
+            runner = f"import json\n{code}\nprint(json.dumps(factorial({test_input['n']})))"
+        elif test_type == "findmax":
+            runner = f"import json\n{code}\nprint(json.dumps(findMax({test_input['nums']})))"
+        elif test_type == "secondlargest":
+            runner = f"import json\n{code}\nprint(json.dumps(secondLargest({test_input['nums']})))"
         else:
             return None, "Unknown problem type"
 
