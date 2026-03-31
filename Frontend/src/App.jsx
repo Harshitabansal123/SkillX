@@ -18,44 +18,20 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 const API_BASE = "http://localhost:8000/api";
 
 const apiCall = async (endpoint, method = "GET", body = null, requiresAuth = false) => {
-
-  const headers = {
-    "Content-Type": "application/json"
-  };
-
+  const headers = { "Content-Type": "application/json" };
   if (requiresAuth) {
     const token = localStorage.getItem("skillx_token");
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
+    if (token) headers["Authorization"] = `Bearer ${token}`;
   }
-
-  try {
-
-    const res = await fetch(`${API_BASE}${endpoint}`, {
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : null
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      throw new Error(data.error || data.detail || "Server error");
-    }
-
-    return data;
-
-  } catch (err) {
-
-    console.error("API ERROR:", err);
-
-    throw err;
-
-  }
-
+  const res = await fetch(`${API_BASE}${endpoint}`, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : null,
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Something went wrong");
+  return data;
 };
-
 
 /* ─────────────────────────────────────────
    CANVAS: Plasma + Constellation + Particles
@@ -819,13 +795,13 @@ const Dashboard = ({ onNav, username, onLogout }) => {
               <span style={{ fontSize:13, color:"var(--p3)", cursor:"pointer", fontWeight:700 }} onClick={() => onNav("coding")}>See all →</span>
             </div>
             <div className="problems-list">
-              {[["Two Sum","Google","tag-e","Easy"],["Reverse a String","Microsoft","tag-e","Easy"],["FizzBuzz","Apple","tag-e","Easy"]].map(([name, co, tc, diff]) => (
-                <div key={name} className="problem-row" onClick={() => onNav("coding")}>
+              {Object.values(PROBLEMS).slice(0,6).map(p => (
+                <div key={p.id} className="problem-row" onClick={() => onNav("coding")}>
                   <div>
-                    <div style={{ fontSize:13, fontWeight:700 }}>{name}</div>
-                    <div style={{ fontSize:11, color:"var(--muted)", fontFamily:"var(--mono)" }}>{co}</div>
+                    <div style={{ fontSize:13, fontWeight:700 }}>{p.id}. {p.title}</div>
+                    <div style={{ fontSize:11, color:"var(--muted)", fontFamily:"var(--mono)" }}>{p.companies}</div>
                   </div>
-                  <span className={`tag ${tc}`}>{diff}</span>
+                  <span className={`tag ${p.diffClass}`}>{p.difficulty}</span>
                 </div>
               ))}
             </div>
@@ -841,49 +817,174 @@ const Dashboard = ({ onNav, username, onLogout }) => {
 ───────────────────────────────────────── */
 const PROBLEMS = {
   1: {
-    id: 1,
-    title: "Two Sum",
-    difficulty: "Easy",
-    diffClass: "tag-e",
-    companies: "Google · Amazon",
+    id: 1, title: "Two Sum", difficulty: "Easy", diffClass: "tag-e", companies: "Google · Amazon",
     description: "Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.",
     examples: [
       { input: "nums = [2,7,11,15], target = 9", output: "[0,1]", explain: "nums[0] + nums[1] = 2 + 7 = 9" },
       { input: "nums = [3,2,4], target = 6",      output: "[1,2]", explain: "nums[1] + nums[2] = 2 + 4 = 6" },
     ],
-    starter: `def twoSum(nums, target):
+    starter: { python: `def twoSum(nums, target):
     # Write your solution here
-    pass`,
+    pass`, javascript: `function twoSum(nums, target) {
+    // Write your solution here
+}` },
   },
   2: {
-    id: 2,
-    title: "Reverse a String",
-    difficulty: "Easy",
-    diffClass: "tag-e",
-    companies: "Microsoft · Facebook",
+    id: 2, title: "Reverse a String", difficulty: "Easy", diffClass: "tag-e", companies: "Microsoft · Facebook",
     description: "Write a function that reverses a string. The input string is given as a list of characters s. You must do it in-place with O(1) extra memory.",
     examples: [
       { input: 's = ["h","e","l","l","o"]', output: '["o","l","l","e","h"]', explain: "Reverse the array in place" },
       { input: 's = ["H","a","n","n","a","h"]', output: '["h","a","n","n","a","H"]', explain: "Reverse the array in place" },
     ],
-    starter: `def reverseString(s):
+    starter: { python: `def reverseString(s):
     # Write your solution here
-    pass`,
+    pass`, javascript: `function reverseString(s) {
+    // Write your solution here (modify in place)
+}` },
   },
   3: {
-    id: 3,
-    title: "FizzBuzz",
-    difficulty: "Easy",
-    diffClass: "tag-e",
-    companies: "Apple · Netflix",
+    id: 3, title: "FizzBuzz", difficulty: "Easy", diffClass: "tag-e", companies: "Apple · Netflix",
     description: 'Given an integer n, return a list of strings for numbers 1 to n. For multiples of 3 → "Fizz", multiples of 5 → "Buzz", both → "FizzBuzz".',
     examples: [
-      { input: "n = 3",  output: '["1","2","Fizz"]',                          explain: "3 is divisible by 3" },
-      { input: "n = 5",  output: '["1","2","Fizz","4","Buzz"]',               explain: "5 is divisible by 5" },
+      { input: "n = 3", output: '["1","2","Fizz"]', explain: "3 is divisible by 3" },
+      { input: "n = 5", output: '["1","2","Fizz","4","Buzz"]', explain: "5 is divisible by 5" },
     ],
-    starter: `def fizzBuzz(n):
+    starter: { python: `def fizzBuzz(n):
     # Write your solution here
-    pass`,
+    pass`, javascript: `function fizzBuzz(n) {
+    // Write your solution here
+}` },
+  },
+  4: {
+    id: 4, title: "Palindrome Number", difficulty: "Easy", diffClass: "tag-e", companies: "Amazon · Adobe",
+    description: "Given an integer x, return true if x is a palindrome, and false otherwise. A palindrome reads the same forward and backward.",
+    examples: [
+      { input: "x = 121", output: "True", explain: "121 reads as 121 from left to right and right to left" },
+      { input: "x = -121", output: "False", explain: "From left to right it reads -121. From right to left it reads 121-" },
+    ],
+    starter: { python: `def isPalindrome(x):
+    # Write your solution here
+    pass`, javascript: `function isPalindrome(x) {
+    // Write your solution here
+}` },
+  },
+  5: {
+    id: 5, title: "Maximum Subarray", difficulty: "Medium", diffClass: "tag-m", companies: "Google · Microsoft",
+    description: "Given an integer array nums, find the subarray with the largest sum, and return its sum. (Kadane's Algorithm)",
+    examples: [
+      { input: "nums = [-2,1,-3,4,-1,2,1,-5,4]", output: "6", explain: "Subarray [4,-1,2,1] has the largest sum = 6" },
+      { input: "nums = [1]", output: "1", explain: "Only one element" },
+    ],
+    starter: { python: `def maxSubArray(nums):
+    # Write your solution here
+    pass`, javascript: `function maxSubArray(nums) {
+    // Write your solution here
+}` },
+  },
+  6: {
+    id: 6, title: "Valid Parentheses", difficulty: "Easy", diffClass: "tag-e", companies: "Facebook · Twitter",
+    description: "Given a string s containing just the characters '(', ')', '{', '}', '[' and ']', determine if the input string is valid.",
+    examples: [
+      { input: 's = "()"', output: "True", explain: "Opening and closing brackets match" },
+      { input: 's = "()[]{}"', output: "True", explain: "All brackets match in order" },
+      { input: 's = "(]"', output: "False", explain: "Brackets do not match" },
+    ],
+    starter: { python: `def isValid(s):
+    # Write your solution here
+    pass`, javascript: `function isValid(s) {
+    // Write your solution here
+}` },
+  },
+  7: {
+    id: 7, title: "Climbing Stairs", difficulty: "Easy", diffClass: "tag-e", companies: "Amazon · Apple",
+    description: "You are climbing a staircase. It takes n steps to reach the top. Each time you can climb 1 or 2 steps. In how many distinct ways can you climb to the top?",
+    examples: [
+      { input: "n = 2", output: "2", explain: "1+1 or 2 — two ways" },
+      { input: "n = 3", output: "3", explain: "1+1+1, 1+2, 2+1 — three ways" },
+    ],
+    starter: { python: `def climbStairs(n):
+    # Write your solution here
+    pass`, javascript: `function climbStairs(n) {
+    // Write your solution here
+}` },
+  },
+  8: {
+    id: 8, title: "Best Time to Buy Stock", difficulty: "Easy", diffClass: "tag-e", companies: "Amazon · Goldman Sachs",
+    description: "Given an array prices where prices[i] is the price on day i, return the maximum profit you can achieve. You can only buy once and sell once.",
+    examples: [
+      { input: "prices = [7,1,5,3,6,4]", output: "5", explain: "Buy on day 2 (price=1), sell on day 5 (price=6), profit = 5" },
+      { input: "prices = [7,6,4,3,1]", output: "0", explain: "No profit possible, return 0" },
+    ],
+    starter: { python: `def maxProfit(prices):
+    # Write your solution here
+    pass`, javascript: `function maxProfit(prices) {
+    // Write your solution here
+}` },
+  },
+  9: {
+    id: 9, title: "Missing Number", difficulty: "Easy", diffClass: "tag-e", companies: "Microsoft · LinkedIn",
+    description: "Given an array nums containing n distinct numbers in the range [0, n], return the only number in the range that is missing from the array.",
+    examples: [
+      { input: "nums = [3,0,1]", output: "2", explain: "n = 3, numbers 0,1,3 present, 2 is missing" },
+      { input: "nums = [0,1]", output: "2", explain: "n = 2, numbers 0,1 present, 2 is missing" },
+    ],
+    starter: { python: `def missingNumber(nums):
+    # Write your solution here
+    pass`, javascript: `function missingNumber(nums) {
+    // Write your solution here
+}` },
+  },
+  10: {
+    id: 10, title: "Count Vowels", difficulty: "Easy", diffClass: "tag-e", companies: "Infosys · TCS",
+    description: "Given a string s, return the number of vowels (a, e, i, o, u) in the string. Both uppercase and lowercase vowels should be counted.",
+    examples: [
+      { input: 's = "Hello World"', output: "3", explain: "e, o, o are vowels" },
+      { input: 's = "Python"', output: "1", explain: "o is the only vowel" },
+    ],
+    starter: { python: `def countVowels(s):
+    # Write your solution here
+    pass`, javascript: `function countVowels(s) {
+    // Write your solution here
+}` },
+  },
+  11: {
+    id: 11, title: "Factorial", difficulty: "Easy", diffClass: "tag-e", companies: "Wipro · Accenture",
+    description: "Given a non-negative integer n, return its factorial. The factorial of n is the product of all positive integers less than or equal to n.",
+    examples: [
+      { input: "n = 5", output: "120", explain: "5 x 4 x 3 x 2 x 1 = 120" },
+      { input: "n = 0", output: "1", explain: "Factorial of 0 is 1 by definition" },
+    ],
+    starter: { python: `def factorial(n):
+    # Write your solution here
+    pass`, javascript: `function factorial(n) {
+    // Write your solution here
+}` },
+  },
+  12: {
+    id: 12, title: "Find Maximum", difficulty: "Easy", diffClass: "tag-e", companies: "Google · Flipkart",
+    description: "Given an array of integers, return the maximum element in the array without using Python's built-in max() function.",
+    examples: [
+      { input: "nums = [3,1,4,1,5,9,2,6]", output: "9", explain: "9 is the largest element" },
+      { input: "nums = [-5,-3,-1,-4]", output: "-1", explain: "-1 is the largest among negatives" },
+    ],
+    starter: { python: `def findMax(nums):
+    # Write your solution here
+    pass`, javascript: `function findMax(nums) {
+    // Write your solution here
+}` },
+  },
+  13: {
+    id: 13, title: "Second Largest", difficulty: "Medium", diffClass: "tag-m", companies: "Amazon · Zoho",
+    description: "Given an array of integers, return the second largest unique element. If no second largest exists, return -1.",
+    examples: [
+      { input: "nums = [10, 5, 8, 20, 3]", output: "10", explain: "20 is largest, 10 is second largest" },
+      { input: "nums = [5, 5, 5]", output: "-1", explain: "All elements same, no second largest" },
+    ],
+    starter: { python: `def secondLargest(nums):
+    # Write your solution here
+    pass`, javascript: `function secondLargest(nums) {
+    // Write your solution here
+}` },
   },
 };
 
@@ -896,11 +997,18 @@ const CodingPage = ({ onNav, username, onLogout, userLevel = 1, userStreak = 0 }
   const [activeTab, setActiveTab] = useState("problem");
   const [result, setResult]     = useState(null);
   const [aiResult, setAiResult] = useState(null);
+  const [hint, setHint]           = useState(null);
+  const [hintLoading, setHintLoading] = useState(false);
+  const [hintLevel, setHintLevel] = useState(0);
   const [running, setRunning]   = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [language,  setLanguage]  = useState("python");
+  const handleLanguageChange = (lang) => {
+    setLanguage(lang);
+    setCode(PROBLEMS[problemId].starter[lang] || PROBLEMS[problemId].starter.python);
+  };
   const [problemId, setProblemId] = useState(1);
-  const [code, setCode]           = useState(PROBLEMS[1].starter);
+  const [code, setCode]           = useState(PROBLEMS[1].starter.python);
   const toast = React.useContext(ToastContext);
   const ivRef = useRef(null);
 
@@ -915,6 +1023,40 @@ const CodingPage = ({ onNav, username, onLogout, userLevel = 1, userStreak = 0 }
   };
   useEffect(() => () => clearInterval(ivRef.current), []);
   const fmt = (s) => `${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`;
+
+  const getHint = async () => {
+    if (!code.trim()) { toast("⚠️ Write some code first!", "#f43f5e"); return; }
+    setHintLoading(true);
+    setActiveTab("hints");
+    const problem = PROBLEMS[problemId];
+    try {
+      const token = localStorage.getItem("skillx_token");
+      const res = await fetch("http://localhost:8000/api/code/hint/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({
+          problem_title: problem.title,
+          problem_description: problem.description,
+          user_code: code,
+          hint_level: hintLevel,
+          language: language,
+        })
+      });
+      const data = await res.json();
+      if (data.hint) {
+        setHint(data.hint);
+        setHintLevel(prev => Math.min(prev + 1, 2));
+        toast("💡 Hint generated!", "#a855f7");
+      } else {
+        setHint("Could not generate hint. Try again!");
+      }
+    } catch(err) {
+      setHint("Backend not connected. Make sure server is running!");
+      toast("⚠️ Could not get hint", "#f43f5e");
+    } finally {
+      setHintLoading(false);
+    }
+  };
 
   const runCode = async () => {
     if (!code.trim()) { toast("⚠️ Write some code first!", "#f43f5e"); return; }
@@ -989,12 +1131,14 @@ const CodingPage = ({ onNav, username, onLogout, userLevel = 1, userStreak = 0 }
               setResult(null);
               setAiResult(null);
               setActiveTab("problem");
-              setCode(PROBLEMS[pid].starter);
+              setCode(PROBLEMS[pid].starter[language] || PROBLEMS[pid].starter.python);
+              setHint(null);
+              setHintLevel(0);
             }}
           >
-            <option value={1}>Two Sum</option>
-            <option value={2}>Reverse a String</option>
-            <option value={3}>FizzBuzz</option>
+            {Object.values(PROBLEMS).map(p => (
+              <option key={p.id} value={p.id}>{p.id}. {p.title} ({p.difficulty})</option>
+            ))}
           </select>
           <span className={`tag ${PROBLEMS[problemId].diffClass}`}>{PROBLEMS[problemId].difficulty}</span>
           <span style={{ fontSize:12, color:"var(--muted)", fontFamily:"var(--mono)" }}>{PROBLEMS[problemId].companies}</span>
@@ -1035,13 +1179,39 @@ Output: ${ex.output}${ex.explain ? `
                 ))}
               </>}
               {activeTab === "hints" && <>
-                <h3 style={{ marginBottom:16, fontFamily:"var(--display)" }} className="grad-text">💡 Hints</h3>
-                {["Brute force is O(n²). Think about a data structure for O(1) lookup.","Fix x. You need to find target − x. Can you store numbers you've already seen?","A hash map storing value → index lets you check any complement in O(1)."].map((h, i) => (
-                  <div key={i} className="example-block" style={{ marginTop:12 }}>
-                    <div className="example-label">Hint {i+1}</div>
-                    <p style={{ color:"var(--muted)", fontSize:14 }}>{h}</p>
+                <h3 style={{ marginBottom:8, fontFamily:"var(--display)" }} className="grad-text">💡 AI Hint Generator</h3>
+                <p style={{ color:"var(--muted)", fontSize:13, marginBottom:16 }}>Stuck? Get a smart nudge without spoiling the answer!</p>
+                <button
+                  className="btn btn-primary"
+                  onClick={getHint}
+                  disabled={hintLoading}
+                  style={{ marginBottom:20, width:"100%" }}
+                >
+                  {hintLoading ? "🤔 Thinking..." : hintLevel === 0 ? "💡 Get First Hint" : hintLevel === 1 ? "💡 Get Another Hint" : "💡 Get Final Hint"}
+                </button>
+                {hintLoading && (
+                  <div style={{ textAlign:"center", padding:20 }}>
+                    <div style={{ fontSize:32, marginBottom:8 }}>🤖</div>
+                    <p style={{ color:"var(--muted)", fontSize:13 }}>AI is analyzing your code...</p>
                   </div>
-                ))}
+                )}
+                {hint && !hintLoading && (
+                  <div className="example-block" style={{ marginTop:8, borderLeft:"3px solid #a855f7" }}>
+                    <div className="example-label" style={{ color:"#a855f7" }}>💡 Hint {hintLevel}</div>
+                    <p style={{ color:"#c4c4d4", fontSize:14, lineHeight:1.8, marginTop:8 }}>{hint}</p>
+                  </div>
+                )}
+                {!hint && !hintLoading && (
+                  <div style={{ textAlign:"center", padding:30, color:"var(--muted)", fontSize:13 }}>
+                    <div style={{ fontSize:40, marginBottom:8 }}>🤖</div>
+                    <p>Click the button above to get an AI-powered hint based on your current code!</p>
+                  </div>
+                )}
+                {hintLevel >= 3 && (
+                  <p style={{ color:"var(--muted)", fontSize:12, marginTop:12, textAlign:"center" }}>
+                    Maximum hints reached! Try solving it now 💪
+                  </p>
+                )}
               </>}
               {activeTab === "solution" && <>
                 <h3 style={{ marginBottom:14, fontFamily:"var(--display)" }} className="grad-text">📚 Optimal Solution</h3>
@@ -1071,9 +1241,10 @@ Output: ${ex.output}${ex.explain ? `
                 <select
                   className="select-input"
                   value={language}
-                  onChange={e => setLanguage(e.target.value)}
+                  onChange={e => handleLanguageChange(e.target.value)}
                 >
                   <option value="python">🐍 Python</option>
+                  <option value="javascript">🟨 JavaScript</option>
                   <option value="java">☕ Java</option>
                   <option value="cpp">⚡ C++</option>
                   <option value="javascript">🟡 JS</option>

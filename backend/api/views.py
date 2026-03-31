@@ -3,6 +3,9 @@ import subprocess
 import tempfile
 import os
 import json
+import PyPDF2
+import io
+import re
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -21,7 +24,7 @@ def get_tokens(user):
     refresh = RefreshToken.for_user(user)
     return {
         "refresh": str(refresh),
-        "access": str(refresh.access_token),
+        "access":  str(refresh.access_token),
     }
 
 
@@ -29,7 +32,7 @@ def get_tokens(user):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def home(request):
-    return Response({"message": "SkillX Backend Running ✦"})
+    return Response({"message": "SkillX Backend Running ✦"}, status=status.HTTP_200_OK)
 
 
 # ───────── SIGNUP ─────────
@@ -37,15 +40,14 @@ def home(request):
 @permission_classes([AllowAny])
 def signup(request):
     username = request.data.get("username", "").strip()
-    email = request.data.get("email", "").strip()
+    email    = request.data.get("email", "").strip()
     password = request.data.get("password", "")
 
     if not username or not email or not password:
         return Response({"error": "All fields required"}, status=400)
 
     if len(password) < 8:
-        return Response({"error": "Password must be at least 8 characters"}, status=400)
-
+        return Response({"error": "Password must be at least 8 characters"}, status=status.HTTP_400_BAD_REQUEST)
     if User.objects.filter(username=username).exists():
         return Response({"error": "Username already exists"}, status=400)
 
@@ -171,12 +173,12 @@ def run_code(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def submit_code(request):
-
     code = request.data.get("code")
 
     if not code:
         return Response({"error": "No code provided"}, status=400)
 
+    progress, _ = Progress.objects.get_or_create(user=request.user)
     test = {"nums": [2, 7, 11, 15], "target": 9}
 
     output, error = run_python_code(code, test, "twosum")
@@ -186,8 +188,6 @@ def submit_code(request):
 
     correct = output == [0, 1]
 
-    progress, _ = Progress.objects.get_or_create(user=request.user)
-
     progress.submissions += 1
     if correct:
         progress.problems_solved += 1
@@ -196,6 +196,15 @@ def submit_code(request):
     return Response({
         "status": "Accepted" if correct else "Wrong Answer"
     })
+
+
+# ─────── SKILL KEYWORDS ──────────
+SKILL_KEYWORDS = {
+    "Languages":  ["python","java","javascript","typescript","c++","c#","ruby","go","swift","kotlin","php","rust","scala","r","matlab"],
+    "Frameworks": ["react","angular","vue","django","flask","spring","node","express","fastapi","nextjs","laravel","rails","flutter"],
+    "Databases":  ["mysql","postgresql","mongodb","sqlite","redis","firebase","cassandra","dynamodb","oracle","elasticsearch"],
+    "Cloud & Tools": ["aws","azure","gcp","docker","kubernetes","git","jenkins","terraform","linux","nginx","graphql","rest","ci/cd"],
+}
 
 
 # ───────── GOOGLE LOGIN ─────────
