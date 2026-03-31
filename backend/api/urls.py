@@ -1,6 +1,6 @@
 from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
-from .views import home, dashboard, signup, login, run_code, submit_code, upload_resume
+from .views import home, dashboard, signup, login, run_code, submit_code, upload_resume, get_hint
 
 urlpatterns = [
     path("home/",           home),
@@ -9,6 +9,7 @@ urlpatterns = [
     path("dashboard/",      dashboard),
     path("code/run/",       run_code),
     path("code/submit/",    submit_code),
+    path("code/hint/",      get_hint),
     path("resume/upload/",  upload_resume),
     path("token/refresh/",  TokenRefreshView.as_view()),
 ]
