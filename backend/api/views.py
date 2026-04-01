@@ -1,5 +1,5 @@
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 from django.contrib.auth.models import User
@@ -22,14 +22,22 @@ def get_tokens(user):
     }
 
 
+# ── Helper: get or create DB progress ──
+def get_or_create_progress(user):
+    progress, _ = Progress.objects.get_or_create(user=user)
+    return progress
+
+
 # ── Home ──
 @api_view(['GET'])
+@permission_classes([AllowAny])
 def home(request):
     return Response({"message": "SkillX Backend Running ✦"})
 
 
 # ── Signup ──
 @api_view(['POST'])
+@permission_classes([AllowAny])
 def signup(request):
 
     username = request.data.get("username", "").strip()
@@ -66,6 +74,7 @@ def signup(request):
 
 # ── Login ──
 @api_view(['POST'])
+@permission_classes([AllowAny])
 def login(request):
 
     username = request.data.get("username", "").strip()
@@ -97,6 +106,21 @@ def login(request):
     return Response({"error": "Invalid username or password"}, status=401)
 
 
+# ── Logout (blacklist refresh token) ──
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def logout(request):
+    refresh_token = request.data.get("refresh")
+    if not refresh_token:
+        return Response({"error": "Refresh token is required"}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        token = RefreshToken(refresh_token)
+        token.blacklist()
+        return Response({"message": "Logged out successfully"}, status=status.HTTP_200_OK)
+    except TokenError:
+        return Response({"error": "Invalid or already blacklisted token"}, status=status.HTTP_400_BAD_REQUEST)
+
+
 # ── Dashboard ──
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -126,7 +150,6 @@ def dashboard(request):
 # ── Problem test cases ──
 PROBLEM_TESTS = {
     1: [
-<<<<<<< HEAD
         {"input": {"nums": [2,7,11,15], "target": 9}, "expected": [0,1], "type": "twosum"},
         {"input": {"nums": [3,2,4],     "target": 6}, "expected": [1,2], "type": "twosum"},
         {"input": {"nums": [3,3],       "target": 6}, "expected": [0,1], "type": "twosum"},
@@ -225,26 +248,6 @@ def run_python_code(code, test_input, test_type):
             runner = f"import json\n{code}\nprint(json.dumps(secondLargest({test_input['nums']})))"
         else:
             return None, "Unknown problem type"
-=======
-        {"input": {"nums": [2,7,11,15], "target": 9}, "expected": [0,1]},
-        {"input": {"nums": [3,2,4], "target": 6}, "expected": [1,2]},
-        {"input": {"nums": [3,3], "target": 6}, "expected": [0,1]},
-    ]
-}
-
-
-# ── Security check for dangerous code ──
-FORBIDDEN_KEYWORDS = [
-    "import os",
-    "import sys",
-    "import subprocess",
-    "import socket",
-    "import shutil",
-    "open(",
-    "exec(",
-    "eval("
-]
->>>>>>> da7a62ed0b8c30469549a60c93a2d0c9e3469887
 
 
 # ── Run user code ──
