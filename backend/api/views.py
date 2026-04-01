@@ -1,10 +1,12 @@
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import TokenError
+from .models import Progress, SolvedProblem
 import subprocess
 import tempfile
 import os
@@ -23,14 +25,22 @@ def get_tokens(user):
     }
 
 
+# ── Helper: get or create DB progress ──
+def get_or_create_progress(user):
+    progress, _ = Progress.objects.get_or_create(user=user)
+    return progress
+
+
 # ── Home ──
 @api_view(['GET'])
+@permission_classes([AllowAny])
 def home(request):
     return Response({"message": "SkillX Backend Running ✦"}, status=status.HTTP_200_OK)
 
 
 # ── Signup ──
 @api_view(['POST'])
+@permission_classes([AllowAny])
 def signup(request):
     username = request.data.get("username", "").strip()
     email    = request.data.get("email", "").strip()
@@ -59,6 +69,7 @@ def signup(request):
 
 # ── Login ──
 @api_view(['POST'])
+@permission_classes([AllowAny])
 def login(request):
     username = request.data.get("username", "").strip()
     password = request.data.get("password", "")
@@ -66,15 +77,14 @@ def login(request):
     if not username or not password:
         return Response({"error": "Username and password are required"}, status=status.HTTP_400_BAD_REQUEST)
 
-    # Try username first, then try email as fallback
     user = authenticate(username=username, password=password)
     if user is None:
-        # Maybe they typed their email instead of username
         try:
             user_obj = User.objects.get(email=username)
             user = authenticate(username=user_obj.username, password=password)
         except User.DoesNotExist:
             pass
+
     if user is not None:
         tokens = get_tokens(user)
         return Response({
@@ -88,36 +98,62 @@ def login(request):
     return Response({"error": "Invalid username or password"}, status=status.HTTP_401_UNAUTHORIZED)
 
 
+# ── Logout (blacklist refresh token) ──
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def logout(request):
+    refresh_token = request.data.get("refresh")
+    if not refresh_token:
+        return Response({"error": "Refresh token is required"}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        token = RefreshToken(refresh_token)
+        token.blacklist()
+        return Response({"message": "Logged out successfully"}, status=status.HTTP_200_OK)
+    except TokenError:
+        return Response({"error": "Invalid or already blacklisted token"}, status=status.HTTP_400_BAD_REQUEST)
+
+
 # ── Dashboard ──
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def dashboard(request):
-    user = request.user
-    progress = get_progress(user.username)
-    solved   = progress["problems_solved"]
-    subs     = progress["submissions"]
-    accuracy = int(progress["total_score"] / subs) if subs > 0 else 0
-    level    = max(1, solved // 2 + 1)  # every 2 problems = +1 level
+    user     = request.user
+    progress = get_or_create_progress(user)
+    subs     = progress.submissions
+    accuracy = int(progress.score / subs) if subs > 0 else 0
+    level    = max(1, progress.problems_solved // 2 + 1)
 
     return Response({
         "username":        user.username,
         "email":           user.email,
         "accuracy":        accuracy,
-        "problems_solved": solved,
-        "streak":          solved,   # streak = problems solved for now
+        "problems_solved": progress.problems_solved,
+        "streak":          progress.problems_solved,
         "level":           level,
         "weak_topics":     [],
     }, status=status.HTTP_200_OK)
 
 
-# ── Simple in-memory progress tracker (good enough for demo) ──
-# Key: username, Value: {problems_solved, accuracy_total, submissions}
-user_progress = {}
+# ── Profile Update ──
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def profile_update(request):
+    user  = request.user
+    email = request.data.get("email", "").strip()
+    password = request.data.get("password", "")
 
-def get_progress(username):
-    if username not in user_progress:
-        user_progress[username] = {"problems_solved": 0, "total_score": 0, "submissions": 0, "solved_ids": set()}
-    return user_progress[username]
+    if email:
+        if User.objects.filter(email=email).exclude(pk=user.pk).exists():
+            return Response({"error": "Email already in use"}, status=status.HTTP_400_BAD_REQUEST)
+        user.email = email
+
+    if password:
+        if len(password) < 8:
+            return Response({"error": "Password must be at least 8 characters"}, status=status.HTTP_400_BAD_REQUEST)
+        user.set_password(password)
+
+    user.save()
+    return Response({"message": "Profile updated successfully", "email": user.email}, status=status.HTTP_200_OK)
 
 
 # ── Problem test cases ──
@@ -282,7 +318,6 @@ def run_js_code(code, test_input, test_type):
             f.write(runner)
             tmp_path = f.name
 
-        # Windows needs shell=True for node
         import platform
         use_shell = platform.system() == "Windows"
         cmd = f'node "{tmp_path}"' if use_shell else ['node', tmp_path]
@@ -323,7 +358,6 @@ def get_hint(request):
     hint_level          = int(request.data.get('hint_level', 0))
     language            = request.data.get('language', 'python')
 
-    # Smart rule-based hint engine (no external API needed)
     hints_db = {
         "Two Sum": [
             "Think about what you need to find for each number. If the current number is x, you need to find target - x somewhere in the array.",
@@ -392,20 +426,14 @@ def get_hint(request):
         ],
     }
 
-    # Get hints for this problem
     problem_hints = hints_db.get(problem_title, [
         "Break the problem into smaller parts. What is the simplest case?",
         "Think about what data structure would make lookups faster.",
         "Consider the time complexity. Can you do better than O(n²)?",
     ])
 
-    # Analyse user code to give contextual hint
-    code_empty    = not user_code.strip() or user_code.strip().endswith("pass") or user_code.strip().endswith("// Write your solution here")
-    code_has_loop = "for" in user_code or "while" in user_code
-    code_has_dict = "dict" in user_code or "{}" in user_code or "Map" in user_code or "map" in user_code
-    code_short    = len(user_code.strip().split("\n")) <= 3
+    code_empty = not user_code.strip() or user_code.strip().endswith("pass") or user_code.strip().endswith("// Write your solution here")
 
-    # Pick hint based on code state and level
     if code_empty:
         hint_text = f"Your code is empty! Start by understanding the problem. {problem_hints[0]}"
     elif hint_level < len(problem_hints):
@@ -413,7 +441,6 @@ def get_hint(request):
     else:
         hint_text = "You have seen all hints! Trust your understanding and try submitting your solution. You can do it! 💪"
 
-    # Add language specific tip
     if language == "javascript" and hint_level >= 1:
         hint_text += " (In JavaScript, you can use a Map or plain object {} for hash map operations.)"
 
@@ -435,7 +462,7 @@ def extract_text_from_pdf(file):
         for page in reader.pages:
             text += page.extract_text() or ""
         return text.lower()
-    except Exception as e:
+    except Exception:
         return ""
 
 def detect_skills(text):
@@ -467,11 +494,10 @@ def generate_questions(skills_dict):
     }
     questions = []
     all_skills = [s for skills in skills_dict.values() for s in skills]
-    for skill in all_skills[:6]:  # max 6 questions
+    for skill in all_skills[:6]:
         if skill in question_bank:
             q, diff = question_bank[skill]
             questions.append({"question": q, "skill": skill, "difficulty": diff})
-    # fallback if no matches
     if not questions:
         questions = [
             {"question": "Tell me about a challenging project you worked on.", "skill": "General", "difficulty": "Easy"},
@@ -490,7 +516,7 @@ def upload_resume(request):
     if not file.name.endswith(".pdf"):
         return Response({"error": "Only PDF files are supported"}, status=status.HTTP_400_BAD_REQUEST)
 
-    text   = extract_text_from_pdf(file)
+    text = extract_text_from_pdf(file)
     if not text.strip():
         return Response({"error": "Could not read PDF. Make sure it is not scanned/image-based."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -510,14 +536,22 @@ def upload_resume(request):
 def run_code(request):
     code       = request.data.get("code", "").strip()
     language   = request.data.get("language", "python")
-    problem_id = int(request.data.get("problem_id", 1))
+    problem_id = request.data.get("problem_id", 1)
 
     if not code:
         return Response({"error": "No code provided"}, status=status.HTTP_400_BAD_REQUEST)
+    if len(code) > 5000:
+        return Response({"error": "Code must be under 5000 characters"}, status=status.HTTP_400_BAD_REQUEST)
     if language not in ["python", "javascript"]:
         return Response({"error": "Only Python and JavaScript are supported"}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        problem_id = int(problem_id)
+        if problem_id not in PROBLEM_TESTS:
+            return Response({"error": "Invalid problem ID"}, status=status.HTTP_400_BAD_REQUEST)
+    except (ValueError, TypeError):
+        return Response({"error": "problem_id must be a valid integer"}, status=status.HTTP_400_BAD_REQUEST)
 
-    tests   = PROBLEM_TESTS.get(problem_id, PROBLEM_TESTS[1])
+    tests   = PROBLEM_TESTS[problem_id]
     results = []
 
     for i, test in enumerate(tests):
@@ -555,14 +589,22 @@ def run_code(request):
 def submit_code(request):
     code       = request.data.get("code", "").strip()
     language   = request.data.get("language", "python")
-    problem_id = int(request.data.get("problem_id", 1))
+    problem_id = request.data.get("problem_id", 1)
 
     if not code:
         return Response({"error": "No code provided"}, status=status.HTTP_400_BAD_REQUEST)
+    if len(code) > 5000:
+        return Response({"error": "Code must be under 5000 characters"}, status=status.HTTP_400_BAD_REQUEST)
     if language not in ["python", "javascript"]:
         return Response({"error": "Only Python and JavaScript are supported"}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        problem_id = int(problem_id)
+        if problem_id not in PROBLEM_TESTS:
+            return Response({"error": "Invalid problem ID"}, status=status.HTTP_400_BAD_REQUEST)
+    except (ValueError, TypeError):
+        return Response({"error": "problem_id must be a valid integer"}, status=status.HTTP_400_BAD_REQUEST)
 
-    tests   = PROBLEM_TESTS.get(problem_id, PROBLEM_TESTS[1])
+    tests   = PROBLEM_TESTS[problem_id]
     passed  = 0
     total   = len(tests)
     results = []
@@ -583,13 +625,16 @@ def submit_code(request):
     accuracy = int((passed / total) * 100) if total > 0 else 0
     accepted = passed == total
 
-    # Save progress to in-memory tracker
-    progress = get_progress(request.user.username)
-    progress["submissions"] += 1
-    progress["total_score"] += accuracy
-    if accepted and problem_id not in progress["solved_ids"]:
-        progress["problems_solved"] += 1
-        progress["solved_ids"].add(problem_id)
+    # Save progress to database
+    progress = get_or_create_progress(request.user)
+    progress.submissions += 1
+    progress.score += accuracy
+    if accepted:
+        already_solved = SolvedProblem.objects.filter(user=request.user, problem_id=problem_id).exists()
+        if not already_solved:
+            SolvedProblem.objects.create(user=request.user, problem_id=problem_id)
+            progress.problems_solved += 1
+    progress.save()
 
     return Response({
         "status":   "Accepted" if accepted else "Wrong Answer",

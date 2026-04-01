@@ -5,23 +5,21 @@ import os
 # BASE DIRECTORY
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# SECRET KEY
-# In production this should come from environment variables
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-secret-key")
+# SECRET KEY — always from environment in production
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dev-secret-key-change-in-production")
 
-# DEBUG MODE
-# WARNING: Set to False in production
-DEBUG = True
+# DEBUG MODE — set to False in production via env var
+DEBUG = os.environ.get("DJANGO_DEBUG", "True") == "True"
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
 
 
 # APPLICATIONS
 INSTALLED_APPS = [
     'corsheaders',
     'rest_framework',
-    'api',
     'rest_framework_simplejwt.token_blacklist',
+    'api',
 
     'django.contrib.admin',
     'django.contrib.auth',
@@ -77,29 +75,19 @@ DATABASES = {
 }
 
 
-# PASSWORD VALIDATION (IMPROVED SECURITY)
+# PASSWORD VALIDATION
 AUTH_PASSWORD_VALIDATORS = [
-    {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-    },
+    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
 
 # CORS SETTINGS
-# Restrict origins in production
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
 ]
-
 CORS_ALLOW_CREDENTIALS = True
 
 
@@ -108,39 +96,37 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
+    # Default: require authentication on all endpoints
+    # Public endpoints (home, signup, login) use @permission_classes([AllowAny])
     'DEFAULT_PERMISSION_CLASSES': (
-        'rest_framework.permissions.AllowAny',
+        'rest_framework.permissions.IsAuthenticated',
     ),
+    # Rate limiting
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '20/hour',
+        'user': '100/hour',
+    },
 }
 
 
 # JWT SETTINGS
 SIMPLE_JWT = {
-
-    # Access token lifetime
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),
-
-    # Refresh token lifetime
     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
-
-    # Rotate refresh tokens
     'ROTATE_REFRESH_TOKENS': True,
-
-    # Blacklist used tokens
     'BLACKLIST_AFTER_ROTATION': True,
-
-    # Authorization header type
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
 
 # INTERNATIONALIZATION
 LANGUAGE_CODE = 'en-us'
-
 TIME_ZONE = 'UTC'
-
 USE_I18N = True
-
 USE_TZ = True
 
 
@@ -152,29 +138,10 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
-# ---------------- SECURITY SETTINGS ---------------- #
-
-# Prevent MIME sniffing
+# ─── SECURITY SETTINGS ─── #
 SECURE_CONTENT_TYPE_NOSNIFF = True
-
-# Prevent clickjacking
 X_FRAME_OPTIONS = 'DENY'
-
-# Enable browser XSS protection
 SECURE_BROWSER_XSS_FILTER = True
-
-# Secure cookies
 SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = True
-
-# Referrer policy
 SECURE_REFERRER_POLICY = "same-origin"
-
-# --------------------------------------------------- #
-
-# NOTE:
-# For production deployment:
-# DEBUG = False
-# Use strong SECRET_KEY from environment variable
-# Restrict ALLOWED_HOSTS
-# Restrict CORS_ALLOWED_ORIGINS
