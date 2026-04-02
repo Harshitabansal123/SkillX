@@ -1,3 +1,5 @@
+from tokenize import TokenError
+
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
@@ -217,8 +219,168 @@ PROBLEM_TESTS = {
 }
 
 
-# ── Run user code in a sandbox ──
+# ── Call expression builder — maps test type + input to a safe function call ──
+def _build_call(test_type, test_input):
+    """
+    Returns (call_expr, sort_output) for the sandbox.
+    call_expr is a Python expression string using only literals — no user input injected.
+    sort_output tells the sandbox to sort list results before comparing.
+    """
+    t = test_type
+    i = test_input
+    if t == "twosum":
+        return f"twoSum({i['nums']!r}, {i['target']!r})", True
+    elif t == "reverse":
+        return f"reverseString({i['s']!r})", False
+    elif t == "fizzbuzz":
+        return f"fizzBuzz({i['n']!r})", False
+    elif t == "palindrome":
+        return f"isPalindrome({i['x']!r})", False
+    elif t == "maxsubarray":
+        return f"maxSubArray({i['nums']!r})", False
+    elif t == "validparen":
+        return f"isValid({i['s']!r})", False
+    elif t == "climbstairs":
+        return f"climbStairs({i['n']!r})", False
+    elif t == "maxprofit":
+        return f"maxProfit({i['prices']!r})", False
+    elif t == "missingnum":
+        return f"missingNumber({i['nums']!r})", False
+    elif t == "vowels":
+        return f"countVowels({i['s']!r})", False
+    elif t == "factorial":
+        return f"factorial({i['n']!r})", False
+    elif t == "findmax":
+        return f"findMax({i['nums']!r})", False
+    elif t == "secondlargest":
+        return f"secondLargest({i['nums']!r})", False
+    return None, False
+
+
+# ── Dangerous pattern pre-check (fast rejection before sandbox) ──────────────
+BLOCKED_PATTERNS = [
+    r"\b(import|__import__|importlib)\b",
+    r"\bopen\s*\(",
+    r"\bexec\s*\(",
+    r"\beval\s*\(",
+    r"\bcompile\s*\(",
+    r"\bgetattr\s*\(",
+    r"\bsetattr\s*\(",
+    r"\bdelattr\s*\(",
+    r"\b__class__\b",
+    r"\b__bases__\b",
+    r"\b__subclasses__\b",
+    r"\b__globals__\b",
+    r"\b__builtins__\b",
+    r"\bsubprocess\b",
+    r"\bsocket\b",
+    r"\burllib\b",
+    r"\brequests\b",
+    r"\bpickle\b",
+    r"\bshutil\b",
+    r"\bctypes\b",
+    r"breakpoint\s*\(",
+    r"input\s*\(",
+]
+_BLOCKED_RE = re.compile("|".join(BLOCKED_PATTERNS), re.IGNORECASE)
+
+
+def _precheck_code(code):
+    """Returns an error string if dangerous patterns found, else None."""
+    match = _BLOCKED_RE.search(code)
+    if match:
+        return f"Security violation: '{match.group()}' is not allowed in submitted code."
+# ── Sandboxed Python runner ───────────────────────────────────────────────────
 def run_python_code(code, test_input, test_type):
+    # Fast pre-check
+    err = _precheck_code(code)
+    if err:
+        return None, err
+
+    call_expr, sort_output = _build_call(test_type, test_input)
+    if call_expr is None:
+        return None, "Unknown problem type"
+
+    # Special case: reverseString modifies in-place — inject list and return it
+    if test_type == "reverse":
+        wrapped_code = (
+            code + "\n"
+            f"_s = {test_input['s']!r}\n"
+            "reverseString(_s)\n"
+            "_result = _s"
+        )
+        call_expr = "_result"
+        sort_output = False
+    else:
+        wrapped_code = code
+
+    payload = json.dumps({
+        "code":  wrapped_code,
+        "call":  call_expr,
+        "sort":  sort_output,
+    })
+
+    try:
+        if test_type == "twosum":
+            runner = f"import json\n{code}\nnums={test_input['nums']}\ntarget={test_input['target']}\nprint(json.dumps(sorted(twoSum(nums, target))))"
+        elif test_type == "reverse":
+            runner = f"import json\n{code}\ns={test_input['s']}\nreverseString(s)\nprint(json.dumps(s))"
+        elif test_type == "fizzbuzz":
+            runner = f"import json\n{code}\nprint(json.dumps(fizzBuzz({test_input['n']})))"
+        elif test_type == "palindrome":
+            runner = f"import json\n{code}\nprint(json.dumps(isPalindrome({test_input['x']})))"
+        elif test_type == "maxsubarray":
+            runner = f"import json\n{code}\nprint(json.dumps(maxSubArray({test_input['nums']})))"
+        elif test_type == "validparen":
+            runner = f"import json\n{code}\nprint(json.dumps(isValid({repr(test_input['s'])})))"
+        elif test_type == "climbstairs":
+            runner = f"import json\n{code}\nprint(json.dumps(climbStairs({test_input['n']})))"
+        elif test_type == "maxprofit":
+            runner = f"import json\n{code}\nprint(json.dumps(maxProfit({test_input['prices']})))"
+        elif test_type == "missingnum":
+            runner = f"import json\n{code}\nprint(json.dumps(missingNumber({test_input['nums']})))"
+        elif test_type == "vowels":
+            runner = f"import json\n{code}\nprint(json.dumps(countVowels({repr(test_input['s'])})))"
+        elif test_type == "factorial":
+            runner = f"import json\n{code}\nprint(json.dumps(factorial({test_input['n']})))"
+        elif test_type == "findmax":
+            runner = f"import json\n{code}\nprint(json.dumps(findMax({test_input['nums']})))"
+        elif test_type == "secondlargest":
+            runner = f"import json\n{code}\nprint(json.dumps(secondLargest({test_input['nums']})))"
+        else:
+            return None, "Unknown problem type"
+
+
+# ── Sandboxed Python runner ───────────────────────────────────────────────────
+def run_python_code(code, test_input, test_type):
+    # Fast pre-check
+    err = _precheck_code(code)
+    if err:
+        return None, err
+
+    call_expr, sort_output = _build_call(test_type, test_input)
+    if call_expr is None:
+        return None, "Unknown problem type"
+
+    # Special case: reverseString modifies in-place — inject list and return it
+    if test_type == "reverse":
+        wrapped_code = (
+            code + "\n"
+            f"_s = {test_input['s']!r}\n"
+            "reverseString(_s)\n"
+            "_result = _s"
+        )
+        call_expr = "_result"
+        sort_output = False
+    else:
+        wrapped_code = code
+
+    payload = json.dumps({
+        "code":  wrapped_code,
+        "call":  call_expr,
+        "sort":  sort_output,
+    })
+
     try:
         if test_type == "twosum":
             runner = f"import json\n{code}\nnums={test_input['nums']}\ntarget={test_input['target']}\nprint(json.dumps(sorted(twoSum(nums, target))))"
@@ -276,7 +438,7 @@ print(json.dumps(sorted(twoSum(nums,target))))
             ["python", tmp_path],
             capture_output=True,
             text=True,
-            timeout=5
+            timeout=5,          # wall-clock hard limit
         )
 
         os.unlink(tmp_path)
@@ -290,8 +452,12 @@ print(json.dumps(sorted(twoSum(nums,target))))
         return None, "Time Limit Exceeded"
 
     except Exception as e:
-        return None, str(e)
+        return None, f"Sandbox error: {e}"
 
+    raw = proc.stdout.strip()
+    if not raw:
+        stderr_tail = proc.stderr.strip().split("\n")[-1] if proc.stderr.strip() else "No output"
+        return None, stderr_tail
 
 # ── Run Code ──
 @api_view(['POST'])
