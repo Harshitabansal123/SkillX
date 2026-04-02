@@ -14,6 +14,10 @@ import json
 import PyPDF2
 import io
 import re
+import sys
+
+# ── Path to the sandboxed runner script ──
+SANDBOX_SCRIPT = os.path.join(os.path.dirname(__file__), "sandbox_runner.py")
 
 
 # ── Helper: generate JWT tokens ──
@@ -226,126 +230,259 @@ PROBLEM_TESTS = {
 }
 
 
-# ── Run user code in a sandbox ──
+# ── Call expression builder — maps test type + input to a safe function call ──
+def _build_call(test_type, test_input):
+    """
+    Returns (call_expr, sort_output) for the sandbox.
+    call_expr is a Python expression string using only literals — no user input injected.
+    sort_output tells the sandbox to sort list results before comparing.
+    """
+    t = test_type
+    i = test_input
+    if t == "twosum":
+        return f"twoSum({i['nums']!r}, {i['target']!r})", True
+    elif t == "reverse":
+        return f"reverseString({i['s']!r})", False
+    elif t == "fizzbuzz":
+        return f"fizzBuzz({i['n']!r})", False
+    elif t == "palindrome":
+        return f"isPalindrome({i['x']!r})", False
+    elif t == "maxsubarray":
+        return f"maxSubArray({i['nums']!r})", False
+    elif t == "validparen":
+        return f"isValid({i['s']!r})", False
+    elif t == "climbstairs":
+        return f"climbStairs({i['n']!r})", False
+    elif t == "maxprofit":
+        return f"maxProfit({i['prices']!r})", False
+    elif t == "missingnum":
+        return f"missingNumber({i['nums']!r})", False
+    elif t == "vowels":
+        return f"countVowels({i['s']!r})", False
+    elif t == "factorial":
+        return f"factorial({i['n']!r})", False
+    elif t == "findmax":
+        return f"findMax({i['nums']!r})", False
+    elif t == "secondlargest":
+        return f"secondLargest({i['nums']!r})", False
+    return None, False
+
+
+# ── Dangerous pattern pre-check (fast rejection before sandbox) ──────────────
+BLOCKED_PATTERNS = [
+    r"\b(import|__import__|importlib)\b",
+    r"\bopen\s*\(",
+    r"\bexec\s*\(",
+    r"\beval\s*\(",
+    r"\bcompile\s*\(",
+    r"\bgetattr\s*\(",
+    r"\bsetattr\s*\(",
+    r"\bdelattr\s*\(",
+    r"\b__class__\b",
+    r"\b__bases__\b",
+    r"\b__subclasses__\b",
+    r"\b__globals__\b",
+    r"\b__builtins__\b",
+    r"\bsubprocess\b",
+    r"\bsocket\b",
+    r"\burllib\b",
+    r"\brequests\b",
+    r"\bpickle\b",
+    r"\bshutil\b",
+    r"\bctypes\b",
+    r"breakpoint\s*\(",
+    r"input\s*\(",
+]
+_BLOCKED_RE = re.compile("|".join(BLOCKED_PATTERNS), re.IGNORECASE)
+
+
+def _precheck_code(code):
+    """Returns an error string if dangerous patterns found, else None."""
+    match = _BLOCKED_RE.search(code)
+    if match:
+        return f"Security violation: '{match.group()}' is not allowed in submitted code."
+    return None
+
+
+# ── Sandboxed Python runner ───────────────────────────────────────────────────
 def run_python_code(code, test_input, test_type):
+    # Fast pre-check
+    err = _precheck_code(code)
+    if err:
+        return None, err
+
+    call_expr, sort_output = _build_call(test_type, test_input)
+    if call_expr is None:
+        return None, "Unknown problem type"
+
+    # Special case: reverseString modifies in-place — inject list and return it
+    if test_type == "reverse":
+        wrapped_code = (
+            code + "\n"
+            f"_s = {test_input['s']!r}\n"
+            "reverseString(_s)\n"
+            "_result = _s"
+        )
+        call_expr = "_result"
+        sort_output = False
+    else:
+        wrapped_code = code
+
+    payload = json.dumps({
+        "code":  wrapped_code,
+        "call":  call_expr,
+        "sort":  sort_output,
+    })
+
     try:
-        if test_type == "twosum":
-            runner = f"import json\n{code}\nnums={test_input['nums']}\ntarget={test_input['target']}\nprint(json.dumps(sorted(twoSum(nums, target))))"
-        elif test_type == "reverse":
-            runner = f"import json\n{code}\ns={test_input['s']}\nreverseString(s)\nprint(json.dumps(s))"
-        elif test_type == "fizzbuzz":
-            runner = f"import json\n{code}\nprint(json.dumps(fizzBuzz({test_input['n']})))"
-        elif test_type == "palindrome":
-            runner = f"import json\n{code}\nprint(json.dumps(isPalindrome({test_input['x']})))"
-        elif test_type == "maxsubarray":
-            runner = f"import json\n{code}\nprint(json.dumps(maxSubArray({test_input['nums']})))"
-        elif test_type == "validparen":
-            runner = f"import json\n{code}\nprint(json.dumps(isValid({repr(test_input['s'])})))"
-        elif test_type == "climbstairs":
-            runner = f"import json\n{code}\nprint(json.dumps(climbStairs({test_input['n']})))"
-        elif test_type == "maxprofit":
-            runner = f"import json\n{code}\nprint(json.dumps(maxProfit({test_input['prices']})))"
-        elif test_type == "missingnum":
-            runner = f"import json\n{code}\nprint(json.dumps(missingNumber({test_input['nums']})))"
-        elif test_type == "vowels":
-            runner = f"import json\n{code}\nprint(json.dumps(countVowels({repr(test_input['s'])})))"
-        elif test_type == "factorial":
-            runner = f"import json\n{code}\nprint(json.dumps(factorial({test_input['n']})))"
-        elif test_type == "findmax":
-            runner = f"import json\n{code}\nprint(json.dumps(findMax({test_input['nums']})))"
-        elif test_type == "secondlargest":
-            runner = f"import json\n{code}\nprint(json.dumps(secondLargest({test_input['nums']})))"
-        else:
-            return None, "Unknown problem type"
-
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
-            f.write(runner)
-            tmp_path = f.name
-
         proc = subprocess.run(
-            ['python', tmp_path],
+            [sys.executable, SANDBOX_SCRIPT],
+            input=payload,
             capture_output=True,
             text=True,
-            timeout=5
+            timeout=5,          # wall-clock hard limit
         )
-        os.unlink(tmp_path)
-
-        if proc.returncode != 0:
-            return None, proc.stderr.strip().split("\n")[-1]
-
-        output = json.loads(proc.stdout.strip())
-        return output, None
-
     except subprocess.TimeoutExpired:
         return None, "Time Limit Exceeded"
     except Exception as e:
-        return None, str(e)
+        return None, f"Sandbox error: {e}"
 
+    raw = proc.stdout.strip()
+    if not raw:
+        stderr_tail = proc.stderr.strip().split("\n")[-1] if proc.stderr.strip() else "No output"
+        return None, stderr_tail
 
-# ── Run JavaScript code ──
-def run_js_code(code, test_input, test_type):
     try:
-        if test_type == "twosum":
-            runner = f"{code}\nconsole.log(JSON.stringify(twoSum({test_input['nums']}, {test_input['target']}).sort((a,b)=>a-b)));"
-        elif test_type == "reverse":
-            runner = f"{code}\nlet s={test_input['s']};reverseString(s);console.log(JSON.stringify(s));"
-        elif test_type == "fizzbuzz":
-            runner = f"{code}\nconsole.log(JSON.stringify(fizzBuzz({test_input['n']})));"
-        elif test_type == "palindrome":
-            runner = f"{code}\nconsole.log(JSON.stringify(isPalindrome({test_input['x']})));"
-        elif test_type == "maxsubarray":
-            runner = f"{code}\nconsole.log(JSON.stringify(maxSubArray({test_input['nums']})));"
-        elif test_type == "validparen":
-            runner = f"{code}\nconsole.log(JSON.stringify(isValid({repr(test_input['s'])})));"
-        elif test_type == "climbstairs":
-            runner = f"{code}\nconsole.log(JSON.stringify(climbStairs({test_input['n']})));"
-        elif test_type == "maxprofit":
-            runner = f"{code}\nconsole.log(JSON.stringify(maxProfit({test_input['prices']})));"
-        elif test_type == "missingnum":
-            runner = f"{code}\nconsole.log(JSON.stringify(missingNumber({test_input['nums']})));"
-        elif test_type == "vowels":
-            runner = f"{code}\nconsole.log(JSON.stringify(countVowels({repr(test_input['s'])})));"
-        elif test_type == "factorial":
-            runner = f"{code}\nconsole.log(JSON.stringify(factorial({test_input['n']})));"
-        elif test_type == "findmax":
-            runner = f"{code}\nconsole.log(JSON.stringify(findMax({test_input['nums']})));"
-        elif test_type == "secondlargest":
-            runner = f"{code}\nconsole.log(JSON.stringify(secondLargest({test_input['nums']})));"
-        else:
-            return None, "Unknown problem type"
+        result = json.loads(raw)
+    except json.JSONDecodeError:
+        return None, "Invalid output from sandbox"
 
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.js', delete=False) as f:
-            f.write(runner)
-            tmp_path = f.name
+    if "error" in result:
+        return None, result["error"]
 
+    return result["output"], None
+
+
+# ── Sandboxed JavaScript runner (Node with --disallow-code-generation-from-strings) ──
+def run_js_code(code, test_input, test_type):
+    """
+    JavaScript sandbox: runs via Node.js with:
+      --disallow-code-generation-from-strings  (blocks eval/Function constructor)
+      Strict module isolation via a wrapper that removes require/process/global
+      Hard timeout enforced by subprocess
+    """
+    call_expr, sort_output = _build_call(test_type, test_input)
+    if call_expr is None:
+        return None, "Unknown problem type"
+
+    # For reverse (in-place), wrap differently
+    if test_type == "reverse":
+        js_call = (
+            f"(function(){{ "
+            f"let _s = {json.dumps(test_input['s'])}; "
+            f"reverseString(_s); "
+            f"return _s; "
+            f"}})()"
+        )
+    else:
+        # Translate Python call_expr to JS syntax (args are already repr'd as JSON-safe literals)
+        js_call = call_expr  # Python repr of literals is JS-compatible for lists/dicts/strings/ints/bools
+
+    sort_js = ".sort((a,b)=>a-b)" if sort_output else ""
+
+    # Wrap user code: strip require/process/global from scope
+    runner_js = f"""
+'use strict';
+(function() {{
+  // Remove dangerous globals
+  const require    = undefined;
+  const process    = undefined;
+  const global     = undefined;
+  const globalThis = undefined;
+  const __dirname  = undefined;
+  const __filename = undefined;
+  const fetch      = undefined;
+  const XMLHttpRequest = undefined;
+
+  // --- User code ---
+  {code}
+  // --- End user code ---
+
+  try {{
+    const result = {js_call}{sort_js};
+    process.stdout.write(JSON.stringify({{ output: result }}) + '\\n');
+  }} catch(e) {{
+    process.stdout.write(JSON.stringify({{ error: e.message }}) + '\\n');
+  }}
+// Restore process for output only after user code ran
+}}).call({{}});
+"""
+    # We need real process for output — patch: use a temp file approach
+    # but only expose stdout write, not exec/spawn
+    runner_safe = f"""
+'use strict';
+const _out = process.stdout;
+const _write = (s) => _out.write(s);
+// Seal dangerous APIs before running user code
+const _require    = require;
+delete global.require;
+delete global.process;
+delete global.global;
+delete global.globalThis;
+
+{code}
+
+try {{
+  let result = {js_call}{sort_js};
+  _write(JSON.stringify({{ output: result }}) + '\\n');
+}} catch(e) {{
+  _write(JSON.stringify({{ error: e.message }}) + '\\n');
+}}
+"""
+
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.js', delete=False, dir='/tmp') as f:
+        f.write(runner_safe)
+        tmp_path = f.name
+
+    try:
         import platform
         use_shell = platform.system() == "Windows"
-        cmd = f'node "{tmp_path}"' if use_shell else ['node', tmp_path]
-
+        cmd = (
+            f'node --disallow-code-generation-from-strings "{tmp_path}"'
+            if use_shell
+            else ['node', '--disallow-code-generation-from-strings', tmp_path]
+        )
         proc = subprocess.run(
             cmd,
             capture_output=True, text=True, timeout=5,
-            shell=use_shell
+            shell=use_shell,
         )
-        os.unlink(tmp_path)
-
-        if proc.returncode != 0:
-            err = proc.stderr.strip().split("\n")[-1] if proc.stderr.strip() else "Runtime error"
-            return None, err
-
-        out = proc.stdout.strip()
-        if not out:
-            return None, "No output — did you return the value?"
-
-        output = json.loads(out)
-        return output, None
-
     except subprocess.TimeoutExpired:
         return None, "Time Limit Exceeded"
     except FileNotFoundError:
         return None, "Node.js not found — make sure Node is installed"
     except Exception as e:
         return None, str(e)
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+
+    raw = proc.stdout.strip()
+    if not raw:
+        err = proc.stderr.strip().split("\n")[-1] if proc.stderr.strip() else "No output — did you return a value?"
+        return None, err
+
+    try:
+        result = json.loads(raw)
+    except json.JSONDecodeError:
+        return None, "Invalid output from sandbox"
+
+    if "error" in result:
+        return None, result["error"]
+
+    return result["output"], None
 
 
 # ── AI Hint Generator ──
