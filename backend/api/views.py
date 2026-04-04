@@ -1,4 +1,8 @@
-from tokenize import TokenError
+import re
+import subprocess
+import tempfile
+import os
+import json
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -7,15 +11,12 @@ from rest_framework import status
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import TokenError
+
 from .models import Progress
 
-import subprocess
-import tempfile
-import os
-import json
 
-
-# ── Helper: generate JWT tokens ──
+# ───────── JWT Helpers ─────────
 def get_tokens(user):
     refresh = RefreshToken.for_user(user)
     return {
@@ -24,510 +25,181 @@ def get_tokens(user):
     }
 
 
-# ── Helper: get or create DB progress ──
-def get_or_create_progress(user):
-    progress, _ = Progress.objects.get_or_create(user=user)
-    return progress
-
-
-# ── Home ──
+# ───────── HOME ─────────
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def home(request):
     return Response({"message": "SkillX Backend Running ✦"})
 
 
-# ── Signup ──
+# ───────── SIGNUP ─────────
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def signup(request):
-
     username = request.data.get("username", "").strip()
     email = request.data.get("email", "").strip()
     password = request.data.get("password", "")
 
     if not username or not email or not password:
-        return Response({"error": "Username, email and password are required"}, status=400)
+        return Response({"error": "All fields required"}, status=400)
 
     if len(password) < 8:
         return Response({"error": "Password must be at least 8 characters"}, status=400)
 
     if User.objects.filter(username=username).exists():
-        return Response({"error": "Username already taken"}, status=400)
-
-    if User.objects.filter(email=email).exists():
-        return Response({"error": "Email already registered"}, status=400)
+        return Response({"error": "Username already exists"}, status=400)
 
     user = User.objects.create_user(username=username, email=email, password=password)
 
-    tokens = get_tokens(user)
-
-    # create progress entry
     Progress.objects.get_or_create(user=user)
 
+    tokens = get_tokens(user)
+
     return Response({
-        "message": "Account created successfully",
+        "message": "Account created",
         "token": tokens["access"],
         "refresh": tokens["refresh"],
-        "username": user.username,
-        "email": user.email,
-    }, status=201)
+        "username": user.username
+    })
 
 
-# ── Login ──
+# ───────── LOGIN ─────────
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def login(request):
-
-    username = request.data.get("username", "").strip()
-    password = request.data.get("password", "")
-
-    if not username or not password:
-        return Response({"error": "Username and password are required"}, status=400)
+    username = request.data.get("username")
+    password = request.data.get("password")
 
     user = authenticate(username=username, password=password)
 
-    if user is None:
-        try:
-            user_obj = User.objects.get(email=username)
-            user = authenticate(username=user_obj.username, password=password)
-        except User.DoesNotExist:
-            pass
-
     if user:
         tokens = get_tokens(user)
-
         return Response({
-            "message": "Login successful",
             "token": tokens["access"],
-            "refresh": tokens["refresh"],
-            "username": user.username,
-            "email": user.email,
+            "refresh": tokens["refresh"]
         })
 
-    return Response({"error": "Invalid username or password"}, status=401)
+    return Response({"error": "Invalid credentials"}, status=401)
 
 
-# ── Logout (blacklist refresh token) ──
+# ───────── LOGOUT ─────────
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def logout(request):
-    refresh_token = request.data.get("refresh")
-    if not refresh_token:
-        return Response({"error": "Refresh token is required"}, status=status.HTTP_400_BAD_REQUEST)
     try:
-        token = RefreshToken(refresh_token)
+        token = RefreshToken(request.data.get("refresh"))
         token.blacklist()
-        return Response({"message": "Logged out successfully"}, status=status.HTTP_200_OK)
-    except TokenError:
-        return Response({"error": "Invalid or already blacklisted token"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"message": "Logged out"})
+    except:
+        return Response({"error": "Invalid token"}, status=400)
 
 
-# ── Dashboard ──
+# ───────── DASHBOARD ─────────
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def dashboard(request):
-
-    user = request.user
-
-    progress, _ = Progress.objects.get_or_create(user=user)
-
-    solved = progress.problems_solved
-    subs = progress.submissions
-
-    accuracy = int(progress.score / subs) if subs > 0 else 0
-    level = max(1, solved // 2 + 1)
+    progress, _ = Progress.objects.get_or_create(user=request.user)
 
     return Response({
-        "username": user.username,
-        "email": user.email,
-        "accuracy": accuracy,
-        "problems_solved": solved,
-        "streak": solved,
-        "level": level,
-        "weak_topics": []
+        "username": request.user.username,
+        "problems_solved": progress.problems_solved,
+        "submissions": progress.submissions
     })
 
 
-# ── Problem test cases ──
-PROBLEM_TESTS = {
-    1: [
-        {"input": {"nums": [2,7,11,15], "target": 9}, "expected": [0,1], "type": "twosum"},
-        {"input": {"nums": [3,2,4],     "target": 6}, "expected": [1,2], "type": "twosum"},
-        {"input": {"nums": [3,3],       "target": 6}, "expected": [0,1], "type": "twosum"},
-    ],
-    2: [
-        {"input": {"s": ["h","e","l","l","o"]},     "expected": ["o","l","l","e","h"],     "type": "reverse"},
-        {"input": {"s": ["H","a","n","n","a","h"]}, "expected": ["h","a","n","n","a","H"], "type": "reverse"},
-    ],
-    3: [
-        {"input": {"n": 3},  "expected": ["1","2","Fizz"],  "type": "fizzbuzz"},
-        {"input": {"n": 5},  "expected": ["1","2","Fizz","4","Buzz"], "type": "fizzbuzz"},
-        {"input": {"n": 15}, "expected": ["1","2","Fizz","4","Buzz","Fizz","7","8","Fizz","Buzz","11","Fizz","13","14","FizzBuzz"], "type": "fizzbuzz"},
-    ],
-    4: [
-        {"input": {"x": 121},  "expected": True,  "type": "palindrome"},
-        {"input": {"x": -121}, "expected": False, "type": "palindrome"},
-        {"input": {"x": 10},   "expected": False, "type": "palindrome"},
-    ],
-    5: [
-        {"input": {"nums": [-2,1,-3,4,-1,2,1,-5,4]}, "expected": 6,  "type": "maxsubarray"},
-        {"input": {"nums": [1]},                       "expected": 1,  "type": "maxsubarray"},
-        {"input": {"nums": [5,4,-1,7,8]},              "expected": 23, "type": "maxsubarray"},
-    ],
-    6: [
-        {"input": {"s": "()"},     "expected": True,  "type": "validparen"},
-        {"input": {"s": "()[]{}"}, "expected": True,  "type": "validparen"},
-        {"input": {"s": "(]"},     "expected": False, "type": "validparen"},
-        {"input": {"s": "([)]"},   "expected": False, "type": "validparen"},
-    ],
-    7: [
-        {"input": {"n": 2}, "expected": 2, "type": "climbstairs"},
-        {"input": {"n": 3}, "expected": 3, "type": "climbstairs"},
-        {"input": {"n": 5}, "expected": 8, "type": "climbstairs"},
-    ],
-    8: [
-        {"input": {"prices": [7,1,5,3,6,4]}, "expected": 5, "type": "maxprofit"},
-        {"input": {"prices": [7,6,4,3,1]},   "expected": 0, "type": "maxprofit"},
-        {"input": {"prices": [1,2]},          "expected": 1, "type": "maxprofit"},
-    ],
-    9: [
-        {"input": {"nums": [3,0,1]},   "expected": 2, "type": "missingnum"},
-        {"input": {"nums": [0,1]},     "expected": 2, "type": "missingnum"},
-        {"input": {"nums": [9,6,4,2,3,5,7,0,1]}, "expected": 8, "type": "missingnum"},
-    ],
-    10: [
-        {"input": {"s": "Hello World"}, "expected": 3, "type": "vowels"},
-        {"input": {"s": "Python"},      "expected": 1, "type": "vowels"},
-        {"input": {"s": "aeiou"},       "expected": 5, "type": "vowels"},
-    ],
-    11: [
-        {"input": {"n": 5}, "expected": 120, "type": "factorial"},
-        {"input": {"n": 0}, "expected": 1,   "type": "factorial"},
-        {"input": {"n": 7}, "expected": 5040,"type": "factorial"},
-    ],
-    12: [
-        {"input": {"nums": [3,1,4,1,5,9,2,6]}, "expected": 9,  "type": "findmax"},
-        {"input": {"nums": [-5,-3,-1,-4]},       "expected": -1, "type": "findmax"},
-        {"input": {"nums": [42]},                "expected": 42, "type": "findmax"},
-    ],
-    13: [
-        {"input": {"nums": [10,5,8,20,3]}, "expected": 10, "type": "secondlargest"},
-        {"input": {"nums": [5,5,5]},       "expected": -1, "type": "secondlargest"},
-        {"input": {"nums": [1,2]},         "expected": 1,  "type": "secondlargest"},
-    ],
-}
-
-
-# ── Call expression builder — maps test type + input to a safe function call ──
-def _build_call(test_type, test_input):
-    """
-    Returns (call_expr, sort_output) for the sandbox.
-    call_expr is a Python expression string using only literals — no user input injected.
-    sort_output tells the sandbox to sort list results before comparing.
-    """
-    t = test_type
-    i = test_input
-    if t == "twosum":
-        return f"twoSum({i['nums']!r}, {i['target']!r})", True
-    elif t == "reverse":
-        return f"reverseString({i['s']!r})", False
-    elif t == "fizzbuzz":
-        return f"fizzBuzz({i['n']!r})", False
-    elif t == "palindrome":
-        return f"isPalindrome({i['x']!r})", False
-    elif t == "maxsubarray":
-        return f"maxSubArray({i['nums']!r})", False
-    elif t == "validparen":
-        return f"isValid({i['s']!r})", False
-    elif t == "climbstairs":
-        return f"climbStairs({i['n']!r})", False
-    elif t == "maxprofit":
-        return f"maxProfit({i['prices']!r})", False
-    elif t == "missingnum":
-        return f"missingNumber({i['nums']!r})", False
-    elif t == "vowels":
-        return f"countVowels({i['s']!r})", False
-    elif t == "factorial":
-        return f"factorial({i['n']!r})", False
-    elif t == "findmax":
-        return f"findMax({i['nums']!r})", False
-    elif t == "secondlargest":
-        return f"secondLargest({i['nums']!r})", False
-    return None, False
-
-
-# ── Dangerous pattern pre-check (fast rejection before sandbox) ──────────────
-BLOCKED_PATTERNS = [
-    r"\b(import|__import__|importlib)\b",
-    r"\bopen\s*\(",
-    r"\bexec\s*\(",
-    r"\beval\s*\(",
-    r"\bcompile\s*\(",
-    r"\bgetattr\s*\(",
-    r"\bsetattr\s*\(",
-    r"\bdelattr\s*\(",
-    r"\b__class__\b",
-    r"\b__bases__\b",
-    r"\b__subclasses__\b",
-    r"\b__globals__\b",
-    r"\b__builtins__\b",
-    r"\bsubprocess\b",
-    r"\bsocket\b",
-    r"\burllib\b",
-    r"\brequests\b",
-    r"\bpickle\b",
-    r"\bshutil\b",
-    r"\bctypes\b",
-    r"breakpoint\s*\(",
-    r"input\s*\(",
-]
-_BLOCKED_RE = re.compile("|".join(BLOCKED_PATTERNS), re.IGNORECASE)
-
-
-def _precheck_code(code):
-    """Returns an error string if dangerous patterns found, else None."""
-    match = _BLOCKED_RE.search(code)
-    if match:
-        return f"Security violation: '{match.group()}' is not allowed in submitted code."
-# ── Sandboxed Python runner ───────────────────────────────────────────────────
+# ───────── SAFE PYTHON EXECUTION ─────────
 def run_python_code(code, test_input, test_type):
-    # Fast pre-check
-    err = _precheck_code(code)
-    if err:
-        return None, err
-
-    call_expr, sort_output = _build_call(test_type, test_input)
-    if call_expr is None:
-        return None, "Unknown problem type"
-
-    # Special case: reverseString modifies in-place — inject list and return it
-    if test_type == "reverse":
-        wrapped_code = (
-            code + "\n"
-            f"_s = {test_input['s']!r}\n"
-            "reverseString(_s)\n"
-            "_result = _s"
-        )
-        call_expr = "_result"
-        sort_output = False
-    else:
-        wrapped_code = code
-
-    payload = json.dumps({
-        "code":  wrapped_code,
-        "call":  call_expr,
-        "sort":  sort_output,
-    })
-
     try:
-        if test_type == "twosum":
-            runner = f"import json\n{code}\nnums={test_input['nums']}\ntarget={test_input['target']}\nprint(json.dumps(sorted(twoSum(nums, target))))"
-        elif test_type == "reverse":
-            runner = f"import json\n{code}\ns={test_input['s']}\nreverseString(s)\nprint(json.dumps(s))"
-        elif test_type == "fizzbuzz":
-            runner = f"import json\n{code}\nprint(json.dumps(fizzBuzz({test_input['n']})))"
-        elif test_type == "palindrome":
-            runner = f"import json\n{code}\nprint(json.dumps(isPalindrome({test_input['x']})))"
-        elif test_type == "maxsubarray":
-            runner = f"import json\n{code}\nprint(json.dumps(maxSubArray({test_input['nums']})))"
-        elif test_type == "validparen":
-            runner = f"import json\n{code}\nprint(json.dumps(isValid({repr(test_input['s'])})))"
-        elif test_type == "climbstairs":
-            runner = f"import json\n{code}\nprint(json.dumps(climbStairs({test_input['n']})))"
-        elif test_type == "maxprofit":
-            runner = f"import json\n{code}\nprint(json.dumps(maxProfit({test_input['prices']})))"
-        elif test_type == "missingnum":
-            runner = f"import json\n{code}\nprint(json.dumps(missingNumber({test_input['nums']})))"
-        elif test_type == "vowels":
-            runner = f"import json\n{code}\nprint(json.dumps(countVowels({repr(test_input['s'])})))"
-        elif test_type == "factorial":
-            runner = f"import json\n{code}\nprint(json.dumps(factorial({test_input['n']})))"
-        elif test_type == "findmax":
-            runner = f"import json\n{code}\nprint(json.dumps(findMax({test_input['nums']})))"
-        elif test_type == "secondlargest":
-            runner = f"import json\n{code}\nprint(json.dumps(secondLargest({test_input['nums']})))"
-        else:
-            return None, "Unknown problem type"
-
-
-# ── Sandboxed Python runner ───────────────────────────────────────────────────
-def run_python_code(code, test_input, test_type):
-    # Fast pre-check
-    err = _precheck_code(code)
-    if err:
-        return None, err
-
-    call_expr, sort_output = _build_call(test_type, test_input)
-    if call_expr is None:
-        return None, "Unknown problem type"
-
-    # Special case: reverseString modifies in-place — inject list and return it
-    if test_type == "reverse":
-        wrapped_code = (
-            code + "\n"
-            f"_s = {test_input['s']!r}\n"
-            "reverseString(_s)\n"
-            "_result = _s"
-        )
-        call_expr = "_result"
-        sort_output = False
-    else:
-        wrapped_code = code
-
-    payload = json.dumps({
-        "code":  wrapped_code,
-        "call":  call_expr,
-        "sort":  sort_output,
-    })
-
-    try:
-        if test_type == "twosum":
-            runner = f"import json\n{code}\nnums={test_input['nums']}\ntarget={test_input['target']}\nprint(json.dumps(sorted(twoSum(nums, target))))"
-        elif test_type == "reverse":
-            runner = f"import json\n{code}\ns={test_input['s']}\nreverseString(s)\nprint(json.dumps(s))"
-        elif test_type == "fizzbuzz":
-            runner = f"import json\n{code}\nprint(json.dumps(fizzBuzz({test_input['n']})))"
-        elif test_type == "palindrome":
-            runner = f"import json\n{code}\nprint(json.dumps(isPalindrome({test_input['x']})))"
-        elif test_type == "maxsubarray":
-            runner = f"import json\n{code}\nprint(json.dumps(maxSubArray({test_input['nums']})))"
-        elif test_type == "validparen":
-            runner = f"import json\n{code}\nprint(json.dumps(isValid({repr(test_input['s'])})))"
-        elif test_type == "climbstairs":
-            runner = f"import json\n{code}\nprint(json.dumps(climbStairs({test_input['n']})))"
-        elif test_type == "maxprofit":
-            runner = f"import json\n{code}\nprint(json.dumps(maxProfit({test_input['prices']})))"
-        elif test_type == "missingnum":
-            runner = f"import json\n{code}\nprint(json.dumps(missingNumber({test_input['nums']})))"
-        elif test_type == "vowels":
-            runner = f"import json\n{code}\nprint(json.dumps(countVowels({repr(test_input['s'])})))"
-        elif test_type == "factorial":
-            runner = f"import json\n{code}\nprint(json.dumps(factorial({test_input['n']})))"
-        elif test_type == "findmax":
-            runner = f"import json\n{code}\nprint(json.dumps(findMax({test_input['nums']})))"
-        elif test_type == "secondlargest":
-            runner = f"import json\n{code}\nprint(json.dumps(secondLargest({test_input['nums']})))"
-        else:
-            return None, "Unknown problem type"
-
-
-# ── Run user code ──
-def run_python_code(code, test_input):
-
-    # Basic sandbox protection
-    for keyword in FORBIDDEN_KEYWORDS:
-        if keyword in code:
-            return None, "Forbidden operation detected"
-
-    try:
-
         runner = f"""
 import json
 {code}
-nums={test_input['nums']}
-target={test_input['target']}
+nums={test_input.get('nums')}
+target={test_input.get('target')}
 print(json.dumps(sorted(twoSum(nums,target))))
 """
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
             f.write(runner)
-            tmp_path = f.name
+            file_path = f.name
 
-        proc = subprocess.run(
-            ["python", tmp_path],
+        result = subprocess.run(
+            ["python", file_path],
             capture_output=True,
             text=True,
-            timeout=5,          # wall-clock hard limit
+            timeout=5
         )
 
-        os.unlink(tmp_path)
+        os.unlink(file_path)
 
-        if proc.returncode != 0:
-            return None, proc.stderr.strip()
+        if result.returncode != 0:
+            return None, result.stderr
 
-        return json.loads(proc.stdout.strip()), None
+        return json.loads(result.stdout), None
 
     except subprocess.TimeoutExpired:
-        return None, "Time Limit Exceeded"
-
+        return None, "Time limit exceeded"
     except Exception as e:
-        return None, f"Sandbox error: {e}"
+        return None, str(e)
 
-    raw = proc.stdout.strip()
-    if not raw:
-        stderr_tail = proc.stderr.strip().split("\n")[-1] if proc.stderr.strip() else "No output"
-        return None, stderr_tail
 
-# ── Run Code ──
+# ───────── RUN CODE ─────────
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def run_code(request):
 
-    code = request.data.get("code", "").strip()
-    problem_id = int(request.data.get("problem_id", 1))
+    code = request.data.get("code")
+    language = request.data.get("language", "python")
 
-    tests = PROBLEM_TESTS.get(problem_id, [])
+    if not code:
+        return Response({"error": "No code provided"}, status=400)
 
-    results = []
+    if language != "python":
+        return Response({"error": "Only Python supported currently"}, status=400)
 
-    for test in tests:
+    # Dummy test case
+    test = {"nums": [2, 7, 11, 15], "target": 9}
 
-        output, error = run_python_code(code, test["input"])
+    output, error = run_python_code(code, test, "twosum")
 
-        if error:
-            results.append({"passed": False, "error": error})
-        else:
-            results.append({"passed": output == test["expected"]})
+    if error:
+        return Response({"error": error})
 
-    return Response({"results": results})
+    return Response({"output": output})
 
 
-# ── Submit Code ──
+# ───────── SUBMIT CODE ─────────
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def submit_code(request):
 
-    code = request.data.get("code", "").strip()
-    problem_id = int(request.data.get("problem_id", 1))
+    code = request.data.get("code")
 
-    tests = PROBLEM_TESTS.get(problem_id, [])
+    if not code:
+        return Response({"error": "No code provided"}, status=400)
 
-    passed = 0
-    total = len(tests)
+    test = {"nums": [2, 7, 11, 15], "target": 9}
 
-    for test in tests:
+    output, error = run_python_code(code, test, "twosum")
 
-        output, error = run_python_code(code, test["input"])
+    if error:
+        return Response({"status": "Error", "error": error})
 
-        if not error and output == test["expected"]:
-            passed += 1
-
-    accuracy = int((passed / total) * 100) if total else 0
-    accepted = passed == total
+    correct = output == [0, 1]
 
     progress, _ = Progress.objects.get_or_create(user=request.user)
 
     progress.submissions += 1
-    progress.score += accuracy
-
-    if accepted:
+    if correct:
         progress.problems_solved += 1
-
     progress.save()
 
     return Response({
-        "status": "Accepted" if accepted else "Wrong Answer",
-        "score": accuracy,
-        "passed": passed,
-        "total": total,
-        "runtime": "~50ms",
-        "memory": "14MB"
+        "status": "Accepted" if correct else "Wrong Answer"
     })
 
 
-# ── Resume Upload ──
+# ───────── GOOGLE LOGIN ─────────
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def upload_resume(request):
-    return Response({"message": "Resume upload working"})
+@permission_classes([AllowAny])
+def google_login(request):
+    return Response({"message": "Google login placeholder"})
