@@ -8,7 +8,7 @@ import io
 import re
 
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from django.contrib.auth.models import User
@@ -30,14 +30,12 @@ def get_tokens(user):
 
 # ───────── HOME ─────────
 @api_view(['GET'])
-@permission_classes([AllowAny])
 def home(request):
     return Response({"message": "SkillX Backend Running ✦"}, status=status.HTTP_200_OK)
 
 
 # ───────── SIGNUP ─────────
 @api_view(['POST'])
-@permission_classes([AllowAny])
 def signup(request):
     username = request.data.get("username", "").strip()
     email    = request.data.get("email", "").strip()
@@ -67,11 +65,11 @@ def signup(request):
 
 # ───────── LOGIN ─────────
 @api_view(['POST'])
-@permission_classes([AllowAny])
 def login(request):
     username = request.data.get("username")
     password = request.data.get("password")
 
+    # Try username first, then try email as fallback
     user = authenticate(username=username, password=password)
 
     if user:
