@@ -465,6 +465,180 @@ int main() {{
         return None, str(e)
 
 
+# ── Run C++ code ──
+def run_cpp_code(code, test_input, test_type):
+    try:
+        import platform
+        use_shell = platform.system() == "Windows"
+
+        if test_type == "twosum":
+            runner = f"""
+#include <bits/stdc++.h>
+using namespace std;
+{code}
+int main() {{
+    vector<int> nums = {{{', '.join(map(str, test_input['nums']))}}};
+    int target = {test_input['target']};
+    vector<int> result = twoSum(nums, target);
+    sort(result.begin(), result.end());
+    cout << "[" << result[0] << "," << result[1] << "]" << endl;
+    return 0;
+}}"""
+        elif test_type == "fizzbuzz":
+            runner = f"""
+#include <bits/stdc++.h>
+using namespace std;
+{code}
+int main() {{
+    vector<string> result = fizzBuzz({test_input['n']});
+    cout << "[";
+    for(int i=0;i<result.size();i++) cout << "\"" << result[i] << "\"" << (i<result.size()-1?",":"");
+    cout << "]" << endl;
+    return 0;
+}}"""
+        elif test_type == "palindrome":
+            runner = f"""
+#include <bits/stdc++.h>
+using namespace std;
+{code}
+int main() {{
+    cout << (isPalindrome({test_input['x']}) ? "true" : "false") << endl;
+    return 0;
+}}"""
+        elif test_type == "maxsubarray":
+            runner = f"""
+#include <bits/stdc++.h>
+using namespace std;
+{code}
+int main() {{
+    vector<int> nums = {{{', '.join(map(str, test_input['nums']))}}};
+    cout << maxSubArray(nums) << endl;
+    return 0;
+}}"""
+        elif test_type == "climbstairs":
+            runner = f"""
+#include <bits/stdc++.h>
+using namespace std;
+{code}
+int main() {{
+    cout << climbStairs({test_input['n']}) << endl;
+    return 0;
+}}"""
+        elif test_type == "maxprofit":
+            runner = f"""
+#include <bits/stdc++.h>
+using namespace std;
+{code}
+int main() {{
+    vector<int> prices = {{{', '.join(map(str, test_input['prices']))}}};
+    cout << maxProfit(prices) << endl;
+    return 0;
+}}"""
+        elif test_type == "missingnum":
+            runner = f"""
+#include <bits/stdc++.h>
+using namespace std;
+{code}
+int main() {{
+    vector<int> nums = {{{', '.join(map(str, test_input['nums']))}}};
+    cout << missingNumber(nums) << endl;
+    return 0;
+}}"""
+        elif test_type == "factorial":
+            runner = f"""
+#include <bits/stdc++.h>
+using namespace std;
+{code}
+int main() {{
+    cout << factorial({test_input['n']}) << endl;
+    return 0;
+}}"""
+        elif test_type == "findmax":
+            runner = f"""
+#include <bits/stdc++.h>
+using namespace std;
+{code}
+int main() {{
+    vector<int> nums = {{{', '.join(map(str, test_input['nums']))}}};
+    cout << findMax(nums) << endl;
+    return 0;
+}}"""
+        elif test_type == "secondlargest":
+            runner = f"""
+#include <bits/stdc++.h>
+using namespace std;
+{code}
+int main() {{
+    vector<int> nums = {{{', '.join(map(str, test_input['nums']))}}};
+    cout << secondLargest(nums) << endl;
+    return 0;
+}}"""
+        elif test_type == "vowels":
+            runner = f"""
+#include <bits/stdc++.h>
+using namespace std;
+{code}
+int main() {{
+    cout << countVowels({repr(test_input['s'])}) << endl;
+    return 0;
+}}"""
+        elif test_type == "validparen":
+            runner = f"""
+#include <bits/stdc++.h>
+using namespace std;
+{code}
+int main() {{
+    cout << (isValid({repr(test_input['s'])}) ? "true" : "false") << endl;
+    return 0;
+}}"""
+        else:
+            return None, "Problem not supported in C++ yet"
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.cpp', delete=False) as f:
+            f.write(runner)
+            src_path = f.name
+
+        exe_path = src_path.replace('.cpp', '.exe')
+
+        compile_proc = subprocess.run(
+            f'g++ "{src_path}" -o "{exe_path}" -std=c++17' if use_shell else ['g++', src_path, '-o', exe_path, '-std=c++17'],
+            capture_output=True, text=True, timeout=10, shell=use_shell
+        )
+        os.unlink(src_path)
+
+        if compile_proc.returncode != 0:
+            return None, "Compilation Error: " + compile_proc.stderr.strip().split("\n")[-1]
+
+        run_proc = subprocess.run(
+            f'"{exe_path}"' if use_shell else [exe_path],
+            capture_output=True, text=True, timeout=5, shell=use_shell
+        )
+        try: os.unlink(exe_path)
+        except: pass
+
+        if run_proc.returncode != 0:
+            return None, run_proc.stderr.strip() or "Runtime error"
+
+        out = run_proc.stdout.strip()
+        if not out:
+            return None, "No output"
+
+        try:
+            import json
+            return json.loads(out), None
+        except:
+            try: return int(out), None
+            except:
+                if out == "true": return True, None
+                if out == "false": return False, None
+                return out, None
+
+    except subprocess.TimeoutExpired:
+        return None, "Time Limit Exceeded"
+    except Exception as e:
+        return None, str(e)
+
+
 # ── Run Java code ──
 def run_java_code(code, test_input, test_type):
     try:
@@ -862,8 +1036,8 @@ def run_code(request):
 
     if not code:
         return Response({"error": "No code provided"}, status=status.HTTP_400_BAD_REQUEST)
-    if language not in ["python", "c", "java"]:
-        return Response({"error": "Only Python, C and Java are supported"}, status=status.HTTP_400_BAD_REQUEST)
+    if language not in ["python", "c", "cpp", "java"]:
+        return Response({"error": "Only Python, C, C++ and Java are supported"}, status=status.HTTP_400_BAD_REQUEST)
 
     tests   = PROBLEM_TESTS.get(problem_id, PROBLEM_TESTS[1])
     results = []
@@ -871,6 +1045,8 @@ def run_code(request):
     for i, test in enumerate(tests):
         if language == "c":
             output, error = run_c_code(code, test["input"], test["type"])
+        elif language == "cpp":
+            output, error = run_cpp_code(code, test["input"], test["type"])
         elif language == "java":
             output, error = run_java_code(code, test["input"], test["type"])
         else:
@@ -909,8 +1085,8 @@ def submit_code(request):
 
     if not code:
         return Response({"error": "No code provided"}, status=status.HTTP_400_BAD_REQUEST)
-    if language not in ["python", "c", "java"]:
-        return Response({"error": "Only Python, C and Java are supported"}, status=status.HTTP_400_BAD_REQUEST)
+    if language not in ["python", "c", "cpp", "java"]:
+        return Response({"error": "Only Python, C, C++ and Java are supported"}, status=status.HTTP_400_BAD_REQUEST)
 
     tests   = PROBLEM_TESTS.get(problem_id, PROBLEM_TESTS[1])
     passed  = 0
@@ -920,6 +1096,8 @@ def submit_code(request):
     for i, test in enumerate(tests):
         if language == "c":
             output, error = run_c_code(code, test["input"], test["type"])
+        elif language == "cpp":
+            output, error = run_cpp_code(code, test["input"], test["type"])
         elif language == "java":
             output, error = run_java_code(code, test["input"], test["type"])
         else:
