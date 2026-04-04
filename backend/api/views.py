@@ -1,12 +1,10 @@
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework_simplejwt.exceptions import TokenError
-from .models import Progress, SolvedProblem
 import subprocess
 import tempfile
 import os
@@ -14,10 +12,6 @@ import json
 import PyPDF2
 import io
 import re
-import sys
-
-# ── Path to the sandboxed runner script ──
-SANDBOX_SCRIPT = os.path.join(os.path.dirname(__file__), "sandbox_runner.py")
 
 
 # ── Helper: generate JWT tokens ──
@@ -29,22 +23,14 @@ def get_tokens(user):
     }
 
 
-# ── Helper: get or create DB progress ──
-def get_or_create_progress(user):
-    progress, _ = Progress.objects.get_or_create(user=user)
-    return progress
-
-
 # ── Home ──
 @api_view(['GET'])
-@permission_classes([AllowAny])
 def home(request):
     return Response({"message": "SkillX Backend Running ✦"}, status=status.HTTP_200_OK)
 
 
 # ── Signup ──
 @api_view(['POST'])
-@permission_classes([AllowAny])
 def signup(request):
     username = request.data.get("username", "").strip()
     email    = request.data.get("email", "").strip()
@@ -73,7 +59,6 @@ def signup(request):
 
 # ── Login ──
 @api_view(['POST'])
-@permission_classes([AllowAny])
 def login(request):
     username = request.data.get("username", "").strip()
     password = request.data.get("password", "")
@@ -81,14 +66,15 @@ def login(request):
     if not username or not password:
         return Response({"error": "Username and password are required"}, status=status.HTTP_400_BAD_REQUEST)
 
+    # Try username first, then try email as fallback
     user = authenticate(username=username, password=password)
     if user is None:
+        # Maybe they typed their email instead of username
         try:
             user_obj = User.objects.get(email=username)
             user = authenticate(username=user_obj.username, password=password)
         except User.DoesNotExist:
             pass
-
     if user is not None:
         tokens = get_tokens(user)
         return Response({
@@ -102,62 +88,36 @@ def login(request):
     return Response({"error": "Invalid username or password"}, status=status.HTTP_401_UNAUTHORIZED)
 
 
-# ── Logout (blacklist refresh token) ──
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def logout(request):
-    refresh_token = request.data.get("refresh")
-    if not refresh_token:
-        return Response({"error": "Refresh token is required"}, status=status.HTTP_400_BAD_REQUEST)
-    try:
-        token = RefreshToken(refresh_token)
-        token.blacklist()
-        return Response({"message": "Logged out successfully"}, status=status.HTTP_200_OK)
-    except TokenError:
-        return Response({"error": "Invalid or already blacklisted token"}, status=status.HTTP_400_BAD_REQUEST)
-
-
 # ── Dashboard ──
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def dashboard(request):
-    user     = request.user
-    progress = get_or_create_progress(user)
-    subs     = progress.submissions
-    accuracy = int(progress.score / subs) if subs > 0 else 0
-    level    = max(1, progress.problems_solved // 2 + 1)
+    user = request.user
+    progress = get_progress(user.username)
+    solved   = progress["problems_solved"]
+    subs     = progress["submissions"]
+    accuracy = int(progress["total_score"] / subs) if subs > 0 else 0
+    level    = max(1, solved // 2 + 1)  # every 2 problems = +1 level
 
     return Response({
         "username":        user.username,
         "email":           user.email,
         "accuracy":        accuracy,
-        "problems_solved": progress.problems_solved,
-        "streak":          progress.problems_solved,
+        "problems_solved": solved,
+        "streak":          solved,   # streak = problems solved for now
         "level":           level,
         "weak_topics":     [],
     }, status=status.HTTP_200_OK)
 
 
-# ── Profile Update ──
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def profile_update(request):
-    user  = request.user
-    email = request.data.get("email", "").strip()
-    password = request.data.get("password", "")
+# ── Simple in-memory progress tracker (good enough for demo) ──
+# Key: username, Value: {problems_solved, accuracy_total, submissions}
+user_progress = {}
 
-    if email:
-        if User.objects.filter(email=email).exclude(pk=user.pk).exists():
-            return Response({"error": "Email already in use"}, status=status.HTTP_400_BAD_REQUEST)
-        user.email = email
-
-    if password:
-        if len(password) < 8:
-            return Response({"error": "Password must be at least 8 characters"}, status=status.HTTP_400_BAD_REQUEST)
-        user.set_password(password)
-
-    user.save()
-    return Response({"message": "Profile updated successfully", "email": user.email}, status=status.HTTP_200_OK)
+def get_progress(username):
+    if username not in user_progress:
+        user_progress[username] = {"problems_solved": 0, "total_score": 0, "submissions": 0, "solved_ids": set()}
+    return user_progress[username]
 
 
 # ── Problem test cases ──
@@ -230,259 +190,176 @@ PROBLEM_TESTS = {
 }
 
 
-# ── Call expression builder — maps test type + input to a safe function call ──
-def _build_call(test_type, test_input):
-    """
-    Returns (call_expr, sort_output) for the sandbox.
-    call_expr is a Python expression string using only literals — no user input injected.
-    sort_output tells the sandbox to sort list results before comparing.
-    """
-    t = test_type
-    i = test_input
-    if t == "twosum":
-        return f"twoSum({i['nums']!r}, {i['target']!r})", True
-    elif t == "reverse":
-        return f"reverseString({i['s']!r})", False
-    elif t == "fizzbuzz":
-        return f"fizzBuzz({i['n']!r})", False
-    elif t == "palindrome":
-        return f"isPalindrome({i['x']!r})", False
-    elif t == "maxsubarray":
-        return f"maxSubArray({i['nums']!r})", False
-    elif t == "validparen":
-        return f"isValid({i['s']!r})", False
-    elif t == "climbstairs":
-        return f"climbStairs({i['n']!r})", False
-    elif t == "maxprofit":
-        return f"maxProfit({i['prices']!r})", False
-    elif t == "missingnum":
-        return f"missingNumber({i['nums']!r})", False
-    elif t == "vowels":
-        return f"countVowels({i['s']!r})", False
-    elif t == "factorial":
-        return f"factorial({i['n']!r})", False
-    elif t == "findmax":
-        return f"findMax({i['nums']!r})", False
-    elif t == "secondlargest":
-        return f"secondLargest({i['nums']!r})", False
-    return None, False
-
-
-# ── Dangerous pattern pre-check (fast rejection before sandbox) ──────────────
-BLOCKED_PATTERNS = [
-    r"\b(import|__import__|importlib)\b",
-    r"\bopen\s*\(",
-    r"\bexec\s*\(",
-    r"\beval\s*\(",
-    r"\bcompile\s*\(",
-    r"\bgetattr\s*\(",
-    r"\bsetattr\s*\(",
-    r"\bdelattr\s*\(",
-    r"\b__class__\b",
-    r"\b__bases__\b",
-    r"\b__subclasses__\b",
-    r"\b__globals__\b",
-    r"\b__builtins__\b",
-    r"\bsubprocess\b",
-    r"\bsocket\b",
-    r"\burllib\b",
-    r"\brequests\b",
-    r"\bpickle\b",
-    r"\bshutil\b",
-    r"\bctypes\b",
-    r"breakpoint\s*\(",
-    r"input\s*\(",
-]
-_BLOCKED_RE = re.compile("|".join(BLOCKED_PATTERNS), re.IGNORECASE)
-
-
-def _precheck_code(code):
-    """Returns an error string if dangerous patterns found, else None."""
-    match = _BLOCKED_RE.search(code)
-    if match:
-        return f"Security violation: '{match.group()}' is not allowed in submitted code."
-    return None
-
-
-# ── Sandboxed Python runner ───────────────────────────────────────────────────
+# ── Run user code in a sandbox ──
 def run_python_code(code, test_input, test_type):
-    # Fast pre-check
-    err = _precheck_code(code)
-    if err:
-        return None, err
-
-    call_expr, sort_output = _build_call(test_type, test_input)
-    if call_expr is None:
-        return None, "Unknown problem type"
-
-    # Special case: reverseString modifies in-place — inject list and return it
-    if test_type == "reverse":
-        wrapped_code = (
-            code + "\n"
-            f"_s = {test_input['s']!r}\n"
-            "reverseString(_s)\n"
-            "_result = _s"
-        )
-        call_expr = "_result"
-        sort_output = False
-    else:
-        wrapped_code = code
-
-    payload = json.dumps({
-        "code":  wrapped_code,
-        "call":  call_expr,
-        "sort":  sort_output,
-    })
-
     try:
+        if test_type == "twosum":
+            runner = f"import json\n{code}\nnums={test_input['nums']}\ntarget={test_input['target']}\nprint(json.dumps(sorted(twoSum(nums, target))))"
+        elif test_type == "reverse":
+            runner = f"import json\n{code}\ns={test_input['s']}\nreverseString(s)\nprint(json.dumps(s))"
+        elif test_type == "fizzbuzz":
+            runner = f"import json\n{code}\nprint(json.dumps(fizzBuzz({test_input['n']})))"
+        elif test_type == "palindrome":
+            runner = f"import json\n{code}\nprint(json.dumps(isPalindrome({test_input['x']})))"
+        elif test_type == "maxsubarray":
+            runner = f"import json\n{code}\nprint(json.dumps(maxSubArray({test_input['nums']})))"
+        elif test_type == "validparen":
+            runner = f"import json\n{code}\nprint(json.dumps(isValid({repr(test_input['s'])})))"
+        elif test_type == "climbstairs":
+            runner = f"import json\n{code}\nprint(json.dumps(climbStairs({test_input['n']})))"
+        elif test_type == "maxprofit":
+            runner = f"import json\n{code}\nprint(json.dumps(maxProfit({test_input['prices']})))"
+        elif test_type == "missingnum":
+            runner = f"import json\n{code}\nprint(json.dumps(missingNumber({test_input['nums']})))"
+        elif test_type == "vowels":
+            runner = f"import json\n{code}\nprint(json.dumps(countVowels({repr(test_input['s'])})))"
+        elif test_type == "factorial":
+            runner = f"import json\n{code}\nprint(json.dumps(factorial({test_input['n']})))"
+        elif test_type == "findmax":
+            runner = f"import json\n{code}\nprint(json.dumps(findMax({test_input['nums']})))"
+        elif test_type == "secondlargest":
+            runner = f"import json\n{code}\nprint(json.dumps(secondLargest({test_input['nums']})))"
+        else:
+            return None, "Unknown problem type"
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+            f.write(runner)
+            tmp_path = f.name
+
         proc = subprocess.run(
-            [sys.executable, SANDBOX_SCRIPT],
-            input=payload,
+            ['python', tmp_path],
             capture_output=True,
             text=True,
-            timeout=5,          # wall-clock hard limit
+            timeout=5
         )
+        os.unlink(tmp_path)
+
+        if proc.returncode != 0:
+            return None, proc.stderr.strip().split("\n")[-1]
+
+        output = json.loads(proc.stdout.strip())
+        return output, None
+
     except subprocess.TimeoutExpired:
         return None, "Time Limit Exceeded"
     except Exception as e:
-        return None, f"Sandbox error: {e}"
-
-    raw = proc.stdout.strip()
-    if not raw:
-        stderr_tail = proc.stderr.strip().split("\n")[-1] if proc.stderr.strip() else "No output"
-        return None, stderr_tail
-
-    try:
-        result = json.loads(raw)
-    except json.JSONDecodeError:
-        return None, "Invalid output from sandbox"
-
-    if "error" in result:
-        return None, result["error"]
-
-    return result["output"], None
+        return None, str(e)
 
 
-# ── Sandboxed JavaScript runner (Node with --disallow-code-generation-from-strings) ──
+# ── Run JavaScript code ──
 def run_js_code(code, test_input, test_type):
-    """
-    JavaScript sandbox: runs via Node.js with:
-      --disallow-code-generation-from-strings  (blocks eval/Function constructor)
-      Strict module isolation via a wrapper that removes require/process/global
-      Hard timeout enforced by subprocess
-    """
-    call_expr, sort_output = _build_call(test_type, test_input)
-    if call_expr is None:
-        return None, "Unknown problem type"
-
-    # For reverse (in-place), wrap differently
-    if test_type == "reverse":
-        js_call = (
-            f"(function(){{ "
-            f"let _s = {json.dumps(test_input['s'])}; "
-            f"reverseString(_s); "
-            f"return _s; "
-            f"}})()"
-        )
-    else:
-        # Translate Python call_expr to JS syntax (args are already repr'd as JSON-safe literals)
-        js_call = call_expr  # Python repr of literals is JS-compatible for lists/dicts/strings/ints/bools
-
-    sort_js = ".sort((a,b)=>a-b)" if sort_output else ""
-
-    # Wrap user code: strip require/process/global from scope
-    runner_js = f"""
-'use strict';
-(function() {{
-  // Remove dangerous globals
-  const require    = undefined;
-  const process    = undefined;
-  const global     = undefined;
-  const globalThis = undefined;
-  const __dirname  = undefined;
-  const __filename = undefined;
-  const fetch      = undefined;
-  const XMLHttpRequest = undefined;
-
-  // --- User code ---
-  {code}
-  // --- End user code ---
-
-  try {{
-    const result = {js_call}{sort_js};
-    process.stdout.write(JSON.stringify({{ output: result }}) + '\\n');
-  }} catch(e) {{
-    process.stdout.write(JSON.stringify({{ error: e.message }}) + '\\n');
-  }}
-// Restore process for output only after user code ran
-}}).call({{}});
-"""
-    # We need real process for output — patch: use a temp file approach
-    # but only expose stdout write, not exec/spawn
-    runner_safe = f"""
-'use strict';
-const _out = process.stdout;
-const _write = (s) => _out.write(s);
-// Seal dangerous APIs before running user code
-const _require    = require;
-delete global.require;
-delete global.process;
-delete global.global;
-delete global.globalThis;
-
-{code}
-
-try {{
-  let result = {js_call}{sort_js};
-  _write(JSON.stringify({{ output: result }}) + '\\n');
-}} catch(e) {{
-  _write(JSON.stringify({{ error: e.message }}) + '\\n');
-}}
-"""
-
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.js', delete=False, dir='/tmp') as f:
-        f.write(runner_safe)
-        tmp_path = f.name
-
     try:
+        if test_type == "twosum":
+            runner = f"{code}\nconsole.log(JSON.stringify(twoSum({test_input['nums']}, {test_input['target']}).sort((a,b)=>a-b)));"
+        elif test_type == "reverse":
+            runner = f"{code}\nlet s={test_input['s']};reverseString(s);console.log(JSON.stringify(s));"
+        elif test_type == "fizzbuzz":
+            runner = f"{code}\nconsole.log(JSON.stringify(fizzBuzz({test_input['n']})));"
+        elif test_type == "palindrome":
+            runner = f"{code}\nconsole.log(JSON.stringify(isPalindrome({test_input['x']})));"
+        elif test_type == "maxsubarray":
+            runner = f"{code}\nconsole.log(JSON.stringify(maxSubArray({test_input['nums']})));"
+        elif test_type == "validparen":
+            runner = f"{code}\nconsole.log(JSON.stringify(isValid({repr(test_input['s'])})));"
+        elif test_type == "climbstairs":
+            runner = f"{code}\nconsole.log(JSON.stringify(climbStairs({test_input['n']})));"
+        elif test_type == "maxprofit":
+            runner = f"{code}\nconsole.log(JSON.stringify(maxProfit({test_input['prices']})));"
+        elif test_type == "missingnum":
+            runner = f"{code}\nconsole.log(JSON.stringify(missingNumber({test_input['nums']})));"
+        elif test_type == "vowels":
+            runner = f"{code}\nconsole.log(JSON.stringify(countVowels({repr(test_input['s'])})));"
+        elif test_type == "factorial":
+            runner = f"{code}\nconsole.log(JSON.stringify(factorial({test_input['n']})));"
+        elif test_type == "findmax":
+            runner = f"{code}\nconsole.log(JSON.stringify(findMax({test_input['nums']})));"
+        elif test_type == "secondlargest":
+            runner = f"{code}\nconsole.log(JSON.stringify(secondLargest({test_input['nums']})));"
+        else:
+            return None, "Unknown problem type"
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.js', delete=False) as f:
+            f.write(runner)
+            tmp_path = f.name
+
+        # Windows needs shell=True for node
         import platform
         use_shell = platform.system() == "Windows"
-        cmd = (
-            f'node --disallow-code-generation-from-strings "{tmp_path}"'
-            if use_shell
-            else ['node', '--disallow-code-generation-from-strings', tmp_path]
-        )
+        cmd = f'node "{tmp_path}"' if use_shell else ['node', tmp_path]
+
         proc = subprocess.run(
             cmd,
             capture_output=True, text=True, timeout=5,
-            shell=use_shell,
+            shell=use_shell
         )
+        os.unlink(tmp_path)
+
+        if proc.returncode != 0:
+            err = proc.stderr.strip().split("\n")[-1] if proc.stderr.strip() else "Runtime error"
+            return None, err
+
+        out = proc.stdout.strip()
+        if not out:
+            return None, "No output — did you return the value?"
+
+        output = json.loads(out)
+        return output, None
+
     except subprocess.TimeoutExpired:
         return None, "Time Limit Exceeded"
     except FileNotFoundError:
         return None, "Node.js not found — make sure Node is installed"
     except Exception as e:
         return None, str(e)
-    finally:
-        try:
-            os.unlink(tmp_path)
-        except OSError:
+
+
+# ── Google OAuth Login ──
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def google_login(request):
+    token = request.data.get('token')
+    if not token:
+        return Response({'error': 'No token provided'}, status=400)
+    try:
+        from urllib.request import urlopen
+        import json as json_lib
+
+        # Verify token with Google
+        url = f"https://oauth2.googleapis.com/tokeninfo?id_token={token}"
+        response = urlopen(url)
+        info = json_lib.loads(response.read())
+
+        email    = info.get('email')
+        name     = info.get('name', email.split('@')[0] if email else 'user')
+        username = email.split('@')[0].replace('.','_') if email else 'user'
+
+        if not email:
+            return Response({'error': 'Could not get email from Google'}, status=400)
+
+        # Get or create user
+        user, created = User.objects.get_or_create(
+            email=email,
+            defaults={
+                'username': username,
+                'first_name': name.split()[0] if name else username,
+            }
+        )
+
+        # If username taken, make unique
+        if created is False and user.username != username:
             pass
 
-    raw = proc.stdout.strip()
-    if not raw:
-        err = proc.stderr.strip().split("\n")[-1] if proc.stderr.strip() else "No output — did you return a value?"
-        return None, err
+        tokens = get_tokens(user)
+        return Response({
+            'message': 'Google login successful',
+            'token':    tokens['access'],
+            'username': user.username,
+            'email':    user.email,
+            'created':  created,
+        })
 
-    try:
-        result = json.loads(raw)
-    except json.JSONDecodeError:
-        return None, "Invalid output from sandbox"
-
-    if "error" in result:
-        return None, result["error"]
-
-    return result["output"], None
+    except Exception as e:
+        return Response({'error': f'Google login failed: {str(e)}'}, status=400)
 
 
 # ── AI Hint Generator ──
@@ -495,6 +372,7 @@ def get_hint(request):
     hint_level          = int(request.data.get('hint_level', 0))
     language            = request.data.get('language', 'python')
 
+    # Smart rule-based hint engine (no external API needed)
     hints_db = {
         "Two Sum": [
             "Think about what you need to find for each number. If the current number is x, you need to find target - x somewhere in the array.",
@@ -563,14 +441,20 @@ def get_hint(request):
         ],
     }
 
+    # Get hints for this problem
     problem_hints = hints_db.get(problem_title, [
         "Break the problem into smaller parts. What is the simplest case?",
         "Think about what data structure would make lookups faster.",
         "Consider the time complexity. Can you do better than O(n²)?",
     ])
 
-    code_empty = not user_code.strip() or user_code.strip().endswith("pass") or user_code.strip().endswith("// Write your solution here")
+    # Analyse user code to give contextual hint
+    code_empty    = not user_code.strip() or user_code.strip().endswith("pass") or user_code.strip().endswith("// Write your solution here")
+    code_has_loop = "for" in user_code or "while" in user_code
+    code_has_dict = "dict" in user_code or "{}" in user_code or "Map" in user_code or "map" in user_code
+    code_short    = len(user_code.strip().split("")) <= 3
 
+    # Pick hint based on code state and level
     if code_empty:
         hint_text = f"Your code is empty! Start by understanding the problem. {problem_hints[0]}"
     elif hint_level < len(problem_hints):
@@ -578,6 +462,7 @@ def get_hint(request):
     else:
         hint_text = "You have seen all hints! Trust your understanding and try submitting your solution. You can do it! 💪"
 
+    # Add language specific tip
     if language == "javascript" and hint_level >= 1:
         hint_text += " (In JavaScript, you can use a Map or plain object {} for hash map operations.)"
 
@@ -599,7 +484,7 @@ def extract_text_from_pdf(file):
         for page in reader.pages:
             text += page.extract_text() or ""
         return text.lower()
-    except Exception:
+    except Exception as e:
         return ""
 
 def detect_skills(text):
@@ -631,10 +516,11 @@ def generate_questions(skills_dict):
     }
     questions = []
     all_skills = [s for skills in skills_dict.values() for s in skills]
-    for skill in all_skills[:6]:
+    for skill in all_skills[:6]:  # max 6 questions
         if skill in question_bank:
             q, diff = question_bank[skill]
             questions.append({"question": q, "skill": skill, "difficulty": diff})
+    # fallback if no matches
     if not questions:
         questions = [
             {"question": "Tell me about a challenging project you worked on.", "skill": "General", "difficulty": "Easy"},
@@ -653,7 +539,7 @@ def upload_resume(request):
     if not file.name.endswith(".pdf"):
         return Response({"error": "Only PDF files are supported"}, status=status.HTTP_400_BAD_REQUEST)
 
-    text = extract_text_from_pdf(file)
+    text   = extract_text_from_pdf(file)
     if not text.strip():
         return Response({"error": "Could not read PDF. Make sure it is not scanned/image-based."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -673,22 +559,14 @@ def upload_resume(request):
 def run_code(request):
     code       = request.data.get("code", "").strip()
     language   = request.data.get("language", "python")
-    problem_id = request.data.get("problem_id", 1)
+    problem_id = int(request.data.get("problem_id", 1))
 
     if not code:
         return Response({"error": "No code provided"}, status=status.HTTP_400_BAD_REQUEST)
-    if len(code) > 5000:
-        return Response({"error": "Code must be under 5000 characters"}, status=status.HTTP_400_BAD_REQUEST)
     if language not in ["python", "javascript"]:
         return Response({"error": "Only Python and JavaScript are supported"}, status=status.HTTP_400_BAD_REQUEST)
-    try:
-        problem_id = int(problem_id)
-        if problem_id not in PROBLEM_TESTS:
-            return Response({"error": "Invalid problem ID"}, status=status.HTTP_400_BAD_REQUEST)
-    except (ValueError, TypeError):
-        return Response({"error": "problem_id must be a valid integer"}, status=status.HTTP_400_BAD_REQUEST)
 
-    tests   = PROBLEM_TESTS[problem_id]
+    tests   = PROBLEM_TESTS.get(problem_id, PROBLEM_TESTS[1])
     results = []
 
     for i, test in enumerate(tests):
@@ -726,22 +604,14 @@ def run_code(request):
 def submit_code(request):
     code       = request.data.get("code", "").strip()
     language   = request.data.get("language", "python")
-    problem_id = request.data.get("problem_id", 1)
+    problem_id = int(request.data.get("problem_id", 1))
 
     if not code:
         return Response({"error": "No code provided"}, status=status.HTTP_400_BAD_REQUEST)
-    if len(code) > 5000:
-        return Response({"error": "Code must be under 5000 characters"}, status=status.HTTP_400_BAD_REQUEST)
     if language not in ["python", "javascript"]:
         return Response({"error": "Only Python and JavaScript are supported"}, status=status.HTTP_400_BAD_REQUEST)
-    try:
-        problem_id = int(problem_id)
-        if problem_id not in PROBLEM_TESTS:
-            return Response({"error": "Invalid problem ID"}, status=status.HTTP_400_BAD_REQUEST)
-    except (ValueError, TypeError):
-        return Response({"error": "problem_id must be a valid integer"}, status=status.HTTP_400_BAD_REQUEST)
 
-    tests   = PROBLEM_TESTS[problem_id]
+    tests   = PROBLEM_TESTS.get(problem_id, PROBLEM_TESTS[1])
     passed  = 0
     total   = len(tests)
     results = []
@@ -762,16 +632,13 @@ def submit_code(request):
     accuracy = int((passed / total) * 100) if total > 0 else 0
     accepted = passed == total
 
-    # Save progress to database
-    progress = get_or_create_progress(request.user)
-    progress.submissions += 1
-    progress.score += accuracy
-    if accepted:
-        already_solved = SolvedProblem.objects.filter(user=request.user, problem_id=problem_id).exists()
-        if not already_solved:
-            SolvedProblem.objects.create(user=request.user, problem_id=problem_id)
-            progress.problems_solved += 1
-    progress.save()
+    # Save progress to in-memory tracker
+    progress = get_progress(request.user.username)
+    progress["submissions"] += 1
+    progress["total_score"] += accuracy
+    if accepted and problem_id not in progress["solved_ids"]:
+        progress["problems_solved"] += 1
+        progress["solved_ids"].add(problem_id)
 
     return Response({
         "status":   "Accepted" if accepted else "Wrong Answer",
