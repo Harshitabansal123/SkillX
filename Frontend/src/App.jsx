@@ -862,11 +862,12 @@ const PROBLEMS = {
       { input: "nums = [2,7,11,15], target = 9", output: "[0,1]", explain: "nums[0] + nums[1] = 2 + 7 = 9" },
       { input: "nums = [3,2,4], target = 6",      output: "[1,2]", explain: "nums[1] + nums[2] = 2 + 4 = 6" },
     ],
-    starter: { python: `def twoSum(nums, target):
-    # Write your solution here
-    pass`, javascript: `function twoSum(nums, target) {
-    // Write your solution here
-}` },
+    starter: {
+      python: `def twoSum(nums, target):\n    # Write your solution here\n    pass`,
+      javascript: `function twoSum(nums, target) {\n    // Write your solution here\n}`,
+      c: `int* twoSum(int* nums, int numsSize, int target) {\n    // Write your solution here\n    int* result = malloc(2 * sizeof(int));\n    return result;\n}`,
+      java: `public static int[] twoSum(int[] nums, int target) {\n    // Write your solution here\n    return new int[]{};\n}`,
+    },
   },
   2: {
     id: 2, title: "Reverse a String", difficulty: "Easy", diffClass: "tag-e", companies: "Microsoft · Facebook",
@@ -875,11 +876,7 @@ const PROBLEMS = {
       { input: 's = ["h","e","l","l","o"]', output: '["o","l","l","e","h"]', explain: "Reverse the array in place" },
       { input: 's = ["H","a","n","n","a","h"]', output: '["h","a","n","n","a","H"]', explain: "Reverse the array in place" },
     ],
-    starter: { python: `def reverseString(s):
-    # Write your solution here
-    pass`, javascript: `function reverseString(s) {
-    // Write your solution here (modify in place)
-}` },
+    starter: { python: `def reverseString(s):\n    # Write your solution here\n    pass`, javascript: `function reverseString(s) {\n    // Modify in place\n}`, c: `void reverseString(char* s, int sSize) {\n    // Write your solution here\n}`, java: `public static void reverseString(char[] s) {\n    // Write your solution here\n}` },
   },
   3: {
     id: 3, title: "FizzBuzz", difficulty: "Easy", diffClass: "tag-e", companies: "Apple · Netflix",
@@ -888,11 +885,7 @@ const PROBLEMS = {
       { input: "n = 3", output: '["1","2","Fizz"]', explain: "3 is divisible by 3" },
       { input: "n = 5", output: '["1","2","Fizz","4","Buzz"]', explain: "5 is divisible by 5" },
     ],
-    starter: { python: `def fizzBuzz(n):
-    # Write your solution here
-    pass`, javascript: `function fizzBuzz(n) {
-    // Write your solution here
-}` },
+    starter: { python: `def fizzBuzz(n):\n    # Write your solution here\n    pass`, javascript: `function fizzBuzz(n) {\n    // Write your solution here\n}`, c: `void fizzBuzz(int n) {\n    // Print each result on new line\n}`, java: `public static java.util.List<String> fizzBuzz(int n) {\n    // Write your solution here\n    return new java.util.ArrayList<>();\n}` },
   },
   4: {
     id: 4, title: "Palindrome Number", difficulty: "Easy", diffClass: "tag-e", companies: "Amazon · Adobe",
@@ -901,11 +894,7 @@ const PROBLEMS = {
       { input: "x = 121", output: "True", explain: "121 reads as 121 from left to right and right to left" },
       { input: "x = -121", output: "False", explain: "From left to right it reads -121. From right to left it reads 121-" },
     ],
-    starter: { python: `def isPalindrome(x):
-    # Write your solution here
-    pass`, javascript: `function isPalindrome(x) {
-    // Write your solution here
-}` },
+    starter: { python: `def isPalindrome(x):\n    # Write your solution here\n    pass`, javascript: `function isPalindrome(x) {\n    // Write your solution here\n}`, c: `int isPalindrome(int x) {\n    // return 1 for true, 0 for false\n}`, java: `public static boolean isPalindrome(int x) {\n    // Write your solution here\n    return false;\n}` },
   },
   5: {
     id: 5, title: "Maximum Subarray", difficulty: "Medium", diffClass: "tag-m", companies: "Google · Microsoft",
@@ -914,11 +903,7 @@ const PROBLEMS = {
       { input: "nums = [-2,1,-3,4,-1,2,1,-5,4]", output: "6", explain: "Subarray [4,-1,2,1] has the largest sum = 6" },
       { input: "nums = [1]", output: "1", explain: "Only one element" },
     ],
-    starter: { python: `def maxSubArray(nums):
-    # Write your solution here
-    pass`, javascript: `function maxSubArray(nums) {
-    // Write your solution here
-}` },
+    starter: { python: `def maxSubArray(nums):\n    # Write your solution here\n    pass`, javascript: `function maxSubArray(nums) {\n    // Write your solution here\n}`, c: `int maxSubArray(int* nums, int numsSize) {\n    // Write your solution here\n}`, java: `public static int maxSubArray(int[] nums) {\n    // Write your solution here\n    return 0;\n}` },
   },
   6: {
     id: 6, title: "Valid Parentheses", difficulty: "Easy", diffClass: "tag-e", companies: "Facebook · Twitter",
@@ -928,11 +913,7 @@ const PROBLEMS = {
       { input: 's = "()[]{}"', output: "True", explain: "All brackets match in order" },
       { input: 's = "(]"', output: "False", explain: "Brackets do not match" },
     ],
-    starter: { python: `def isValid(s):
-    # Write your solution here
-    pass`, javascript: `function isValid(s) {
-    // Write your solution here
-}` },
+    starter: { python: `def isValid(s):\n    # Write your solution here\n    pass`, javascript: `function isValid(s) {\n    // Write your solution here\n}`, c: `int isValid(char* s) {\n    // return 1 for true, 0 for false\n}`, java: `public static boolean isValid(String s) {\n    // Write your solution here\n    return false;\n}` },
   },
   7: {
     id: 7, title: "Climbing Stairs", difficulty: "Easy", diffClass: "tag-e", companies: "Amazon · Apple",
@@ -941,11 +922,7 @@ const PROBLEMS = {
       { input: "n = 2", output: "2", explain: "1+1 or 2 — two ways" },
       { input: "n = 3", output: "3", explain: "1+1+1, 1+2, 2+1 — three ways" },
     ],
-    starter: { python: `def climbStairs(n):
-    # Write your solution here
-    pass`, javascript: `function climbStairs(n) {
-    // Write your solution here
-}` },
+    starter: { python: `def climbStairs(n):\n    # Write your solution here\n    pass`, javascript: `function climbStairs(n) {\n    // Write your solution here\n}`, c: `int climbStairs(int n) {\n    // Write your solution here\n}`, java: `public static int climbStairs(int n) {\n    // Write your solution here\n    return 0;\n}` },
   },
   8: {
     id: 8, title: "Best Time to Buy Stock", difficulty: "Easy", diffClass: "tag-e", companies: "Amazon · Goldman Sachs",
@@ -954,11 +931,7 @@ const PROBLEMS = {
       { input: "prices = [7,1,5,3,6,4]", output: "5", explain: "Buy on day 2 (price=1), sell on day 5 (price=6), profit = 5" },
       { input: "prices = [7,6,4,3,1]", output: "0", explain: "No profit possible, return 0" },
     ],
-    starter: { python: `def maxProfit(prices):
-    # Write your solution here
-    pass`, javascript: `function maxProfit(prices) {
-    // Write your solution here
-}` },
+    starter: { python: `def maxProfit(prices):\n    # Write your solution here\n    pass`, javascript: `function maxProfit(prices) {\n    // Write your solution here\n}`, c: `int maxProfit(int* prices, int pricesSize) {\n    // Write your solution here\n}`, java: `public static int maxProfit(int[] prices) {\n    // Write your solution here\n    return 0;\n}` },
   },
   9: {
     id: 9, title: "Missing Number", difficulty: "Easy", diffClass: "tag-e", companies: "Microsoft · LinkedIn",
@@ -967,11 +940,7 @@ const PROBLEMS = {
       { input: "nums = [3,0,1]", output: "2", explain: "n = 3, numbers 0,1,3 present, 2 is missing" },
       { input: "nums = [0,1]", output: "2", explain: "n = 2, numbers 0,1 present, 2 is missing" },
     ],
-    starter: { python: `def missingNumber(nums):
-    # Write your solution here
-    pass`, javascript: `function missingNumber(nums) {
-    // Write your solution here
-}` },
+    starter: { python: `def missingNumber(nums):\n    # Write your solution here\n    pass`, javascript: `function missingNumber(nums) {\n    // Write your solution here\n}`, c: `int missingNumber(int* nums, int numsSize) {\n    // Write your solution here\n}`, java: `public static int missingNumber(int[] nums) {\n    // Write your solution here\n    return 0;\n}` },
   },
   10: {
     id: 10, title: "Count Vowels", difficulty: "Easy", diffClass: "tag-e", companies: "Infosys · TCS",
@@ -980,11 +949,7 @@ const PROBLEMS = {
       { input: 's = "Hello World"', output: "3", explain: "e, o, o are vowels" },
       { input: 's = "Python"', output: "1", explain: "o is the only vowel" },
     ],
-    starter: { python: `def countVowels(s):
-    # Write your solution here
-    pass`, javascript: `function countVowels(s) {
-    // Write your solution here
-}` },
+    starter: { python: `def countVowels(s):\n    # Write your solution here\n    pass`, javascript: `function countVowels(s) {\n    // Write your solution here\n}`, c: `int countVowels(char* s) {\n    // Write your solution here\n}`, java: `public static int countVowels(String s) {\n    // Write your solution here\n    return 0;\n}` },
   },
   11: {
     id: 11, title: "Factorial", difficulty: "Easy", diffClass: "tag-e", companies: "Wipro · Accenture",
@@ -993,11 +958,7 @@ const PROBLEMS = {
       { input: "n = 5", output: "120", explain: "5 x 4 x 3 x 2 x 1 = 120" },
       { input: "n = 0", output: "1", explain: "Factorial of 0 is 1 by definition" },
     ],
-    starter: { python: `def factorial(n):
-    # Write your solution here
-    pass`, javascript: `function factorial(n) {
-    // Write your solution here
-}` },
+    starter: { python: `def factorial(n):\n    # Write your solution here\n    pass`, javascript: `function factorial(n) {\n    // Write your solution here\n}`, c: `long long factorial(int n) {\n    // Write your solution here\n}`, java: `public static long factorial(int n) {\n    // Write your solution here\n    return 0;\n}` },
   },
   12: {
     id: 12, title: "Find Maximum", difficulty: "Easy", diffClass: "tag-e", companies: "Google · Flipkart",
@@ -1006,11 +967,7 @@ const PROBLEMS = {
       { input: "nums = [3,1,4,1,5,9,2,6]", output: "9", explain: "9 is the largest element" },
       { input: "nums = [-5,-3,-1,-4]", output: "-1", explain: "-1 is the largest among negatives" },
     ],
-    starter: { python: `def findMax(nums):
-    # Write your solution here
-    pass`, javascript: `function findMax(nums) {
-    // Write your solution here
-}` },
+    starter: { python: `def findMax(nums):\n    # Write your solution here\n    pass`, javascript: `function findMax(nums) {\n    // Write your solution here\n}`, c: `int findMax(int* nums, int numsSize) {\n    // Write your solution here\n}`, java: `public static int findMax(int[] nums) {\n    // Write your solution here\n    return 0;\n}` },
   },
   13: {
     id: 13, title: "Second Largest", difficulty: "Medium", diffClass: "tag-m", companies: "Amazon · Zoho",
@@ -1019,11 +976,7 @@ const PROBLEMS = {
       { input: "nums = [10, 5, 8, 20, 3]", output: "10", explain: "20 is largest, 10 is second largest" },
       { input: "nums = [5, 5, 5]", output: "-1", explain: "All elements same, no second largest" },
     ],
-    starter: { python: `def secondLargest(nums):
-    # Write your solution here
-    pass`, javascript: `function secondLargest(nums) {
-    // Write your solution here
-}` },
+    starter: { python: `def secondLargest(nums):\n    # Write your solution here\n    pass`, javascript: `function secondLargest(nums) {\n    // Write your solution here\n}`, c: `int secondLargest(int* nums, int numsSize) {\n    // Write your solution here\n}`, java: `public static int secondLargest(int[] nums) {\n    // Write your solution here\n    return -1;\n}` },
   },
 };
 
@@ -1283,7 +1236,8 @@ Output: ${ex.output}${ex.explain ? `
                   onChange={e => handleLanguageChange(e.target.value)}
                 >
                   <option value="python">🐍 Python</option>
-                  <option value="javascript">🟨 JavaScript</option>
+                  <option value="c">🔵 C</option>
+                  <option value="java">☕ Java</option>
                   <option value="java">☕ Java</option>
                   <option value="cpp">⚡ C++</option>
                   <option value="javascript">🟡 JS</option>
