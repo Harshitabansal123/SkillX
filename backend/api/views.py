@@ -313,6 +313,305 @@ def run_js_code(code, test_input, test_type):
         return None, str(e)
 
 
+# ── Run C code ──
+def run_c_code(code, test_input, test_type):
+    try:
+        import platform
+        # Build runner code
+        if test_type == "twosum":
+            runner = f"""
+#include <stdio.h>
+#include <stdlib.h>
+{code}
+int main() {{
+    int nums[] = {{{', '.join(map(str, test_input['nums']))}}};
+    int target = {test_input['target']};
+    int n = sizeof(nums)/sizeof(nums[0]);
+    int* result = twoSum(nums, n, target);
+    printf("[%d, %d]\n", result[0] < result[1] ? result[0] : result[1], result[0] < result[1] ? result[1] : result[0]);
+    return 0;
+}}"""
+        elif test_type == "fizzbuzz":
+            runner = f"""
+#include <stdio.h>
+{code}
+int main() {{
+    fizzBuzz({test_input['n']});
+    return 0;
+}}"""
+        elif test_type == "factorial":
+            runner = f"""
+#include <stdio.h>
+{code}
+int main() {{
+    printf("%lld\n", factorial({test_input['n']}));
+    return 0;
+}}"""
+        elif test_type == "findmax":
+            runner = f"""
+#include <stdio.h>
+{code}
+int main() {{
+    int nums[] = {{{', '.join(map(str, test_input['nums']))}}};
+    int n = sizeof(nums)/sizeof(nums[0]);
+    printf("%d\n", findMax(nums, n));
+    return 0;
+}}"""
+        elif test_type == "missingnum":
+            runner = f"""
+#include <stdio.h>
+{code}
+int main() {{
+    int nums[] = {{{', '.join(map(str, test_input['nums']))}}};
+    int n = sizeof(nums)/sizeof(nums[0]);
+    printf("%d\n", missingNumber(nums, n));
+    return 0;
+}}"""
+        elif test_type == "palindrome":
+            runner = f"""
+#include <stdio.h>
+{code}
+int main() {{
+    printf("%s\n", isPalindrome({test_input['x']}) ? "true" : "false");
+    return 0;
+}}"""
+        elif test_type == "maxsubarray":
+            runner = f"""
+#include <stdio.h>
+{code}
+int main() {{
+    int nums[] = {{{', '.join(map(str, test_input['nums']))}}};
+    int n = sizeof(nums)/sizeof(nums[0]);
+    printf("%d\n", maxSubArray(nums, n));
+    return 0;
+}}"""
+        elif test_type == "climbstairs":
+            runner = f"""
+#include <stdio.h>
+{code}
+int main() {{
+    printf("%d\n", climbStairs({test_input['n']}));
+    return 0;
+}}"""
+        elif test_type == "maxprofit":
+            runner = f"""
+#include <stdio.h>
+{code}
+int main() {{
+    int prices[] = {{{', '.join(map(str, test_input['prices']))}}};
+    int n = sizeof(prices)/sizeof(prices[0]);
+    printf("%d\n", maxProfit(prices, n));
+    return 0;
+}}"""
+        elif test_type == "secondlargest":
+            runner = f"""
+#include <stdio.h>
+{code}
+int main() {{
+    int nums[] = {{{', '.join(map(str, test_input['nums']))}}};
+    int n = sizeof(nums)/sizeof(nums[0]);
+    printf("%d\n", secondLargest(nums, n));
+    return 0;
+}}"""
+        else:
+            return None, "Problem not supported in C yet"
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.c', delete=False) as f:
+            f.write(runner)
+            src_path = f.name
+
+        exe_path = src_path.replace('.c', '.exe')
+        use_shell = platform.system() == "Windows"
+
+        # Compile
+        compile_proc = subprocess.run(
+            f'gcc "{src_path}" -o "{exe_path}"' if use_shell else ['gcc', src_path, '-o', exe_path],
+            capture_output=True, text=True, timeout=10, shell=use_shell
+        )
+        os.unlink(src_path)
+
+        if compile_proc.returncode != 0:
+            return None, "Compilation Error: " + compile_proc.stderr.strip().split("\n")[-1]
+
+        # Run
+        run_proc = subprocess.run(
+            f'"{exe_path}"' if use_shell else [exe_path],
+            capture_output=True, text=True, timeout=5, shell=use_shell
+        )
+        try: os.unlink(exe_path)
+        except: pass
+
+        if run_proc.returncode != 0:
+            return None, run_proc.stderr.strip() or "Runtime error"
+
+        out = run_proc.stdout.strip()
+        if not out:
+            return None, "No output"
+
+        # Parse output
+        try:
+            import json
+            return json.loads(out), None
+        except:
+            try: return int(out), None
+            except:
+                if out == "true": return True, None
+                if out == "false": return False, None
+                return out, None
+
+    except subprocess.TimeoutExpired:
+        return None, "Time Limit Exceeded"
+    except Exception as e:
+        return None, str(e)
+
+
+# ── Run Java code ──
+def run_java_code(code, test_input, test_type):
+    try:
+        import platform
+        use_shell = platform.system() == "Windows"
+
+        if test_type == "twosum":
+            runner = f"""
+import java.util.*;
+public class Solution {{
+    {code}
+    public static void main(String[] args) {{
+        int[] nums = {{{', '.join(map(str, test_input['nums']))}}};
+        int target = {test_input['target']};
+        int[] result = twoSum(nums, target);
+        Arrays.sort(result);
+        System.out.println(Arrays.toString(result).replace(" ", ""));
+    }}
+}}"""
+        elif test_type == "fizzbuzz":
+            runner = f"""
+import java.util.*;
+public class Solution {{
+    {code}
+    public static void main(String[] args) {{
+        List<String> result = fizzBuzz({test_input['n']});
+        System.out.println(result.toString().replace(", ", ",").replace(" ", ""));
+    }}
+}}"""
+        elif test_type == "factorial":
+            runner = f"""
+public class Solution {{
+    {code}
+    public static void main(String[] args) {{
+        System.out.println(factorial({test_input['n']}));
+    }}
+}}"""
+        elif test_type == "palindrome":
+            runner = f"""
+public class Solution {{
+    {code}
+    public static void main(String[] args) {{
+        System.out.println(isPalindrome({test_input['x']}));
+    }}
+}}"""
+        elif test_type == "maxsubarray":
+            runner = f"""
+public class Solution {{
+    {code}
+    public static void main(String[] args) {{
+        int[] nums = {{{', '.join(map(str, test_input['nums']))}}};
+        System.out.println(maxSubArray(nums));
+    }}
+}}"""
+        elif test_type == "climbstairs":
+            runner = f"""
+public class Solution {{
+    {code}
+    public static void main(String[] args) {{
+        System.out.println(climbStairs({test_input['n']}));
+    }}
+}}"""
+        elif test_type == "maxprofit":
+            runner = f"""
+public class Solution {{
+    {code}
+    public static void main(String[] args) {{
+        int[] prices = {{{', '.join(map(str, test_input['prices']))}}};
+        System.out.println(maxProfit(prices));
+    }}
+}}"""
+        elif test_type == "missingnum":
+            runner = f"""
+public class Solution {{
+    {code}
+    public static void main(String[] args) {{
+        int[] nums = {{{', '.join(map(str, test_input['nums']))}}};
+        System.out.println(missingNumber(nums));
+    }}
+}}"""
+        elif test_type == "findmax":
+            runner = f"""
+public class Solution {{
+    {code}
+    public static void main(String[] args) {{
+        int[] nums = {{{', '.join(map(str, test_input['nums']))}}};
+        System.out.println(findMax(nums));
+    }}
+}}"""
+        elif test_type == "secondlargest":
+            runner = f"""
+public class Solution {{
+    {code}
+    public static void main(String[] args) {{
+        int[] nums = {{{', '.join(map(str, test_input['nums']))}}};
+        System.out.println(secondLargest(nums));
+    }}
+}}"""
+        else:
+            return None, "Problem not supported in Java yet"
+
+        # Write to Solution.java
+        java_dir = tempfile.mkdtemp()
+        java_file = os.path.join(java_dir, "Solution.java")
+        with open(java_file, 'w') as f:
+            f.write(runner)
+
+        # Compile
+        compile_proc = subprocess.run(
+            f'javac "{java_file}"' if use_shell else ['javac', java_file],
+            capture_output=True, text=True, timeout=15, shell=use_shell
+        )
+
+        if compile_proc.returncode != 0:
+            return None, "Compilation Error: " + compile_proc.stderr.strip().split("\n")[0]
+
+        # Run
+        run_proc = subprocess.run(
+            f'java -cp "{java_dir}" Solution' if use_shell else ['java', '-cp', java_dir, 'Solution'],
+            capture_output=True, text=True, timeout=5, shell=use_shell
+        )
+
+        if run_proc.returncode != 0:
+            return None, run_proc.stderr.strip().split("\n")[0] or "Runtime error"
+
+        out = run_proc.stdout.strip()
+        if not out:
+            return None, "No output"
+
+        try:
+            import json
+            return json.loads(out), None
+        except:
+            try: return int(out), None
+            except:
+                if out.lower() == "true": return True, None
+                if out.lower() == "false": return False, None
+                return out, None
+
+    except subprocess.TimeoutExpired:
+        return None, "Time Limit Exceeded"
+    except FileNotFoundError:
+        return None, "Java not found. Make sure Java is installed!"
+    except Exception as e:
+        return None, str(e)
+
+
 # ── Google OAuth Login ──
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -563,15 +862,17 @@ def run_code(request):
 
     if not code:
         return Response({"error": "No code provided"}, status=status.HTTP_400_BAD_REQUEST)
-    if language not in ["python", "javascript"]:
-        return Response({"error": "Only Python and JavaScript are supported"}, status=status.HTTP_400_BAD_REQUEST)
+    if language not in ["python", "c", "java"]:
+        return Response({"error": "Only Python, C and Java are supported"}, status=status.HTTP_400_BAD_REQUEST)
 
     tests   = PROBLEM_TESTS.get(problem_id, PROBLEM_TESTS[1])
     results = []
 
     for i, test in enumerate(tests):
-        if language == "javascript":
-            output, error = run_js_code(code, test["input"], test["type"])
+        if language == "c":
+            output, error = run_c_code(code, test["input"], test["type"])
+        elif language == "java":
+            output, error = run_java_code(code, test["input"], test["type"])
         else:
             output, error = run_python_code(code, test["input"], test["type"])
         if error:
@@ -608,8 +909,8 @@ def submit_code(request):
 
     if not code:
         return Response({"error": "No code provided"}, status=status.HTTP_400_BAD_REQUEST)
-    if language not in ["python", "javascript"]:
-        return Response({"error": "Only Python and JavaScript are supported"}, status=status.HTTP_400_BAD_REQUEST)
+    if language not in ["python", "c", "java"]:
+        return Response({"error": "Only Python, C and Java are supported"}, status=status.HTTP_400_BAD_REQUEST)
 
     tests   = PROBLEM_TESTS.get(problem_id, PROBLEM_TESTS[1])
     passed  = 0
@@ -617,8 +918,10 @@ def submit_code(request):
     results = []
 
     for i, test in enumerate(tests):
-        if language == "javascript":
-            output, error = run_js_code(code, test["input"], test["type"])
+        if language == "c":
+            output, error = run_c_code(code, test["input"], test["type"])
+        elif language == "java":
+            output, error = run_java_code(code, test["input"], test["type"])
         else:
             output, error = run_python_code(code, test["input"], test["type"])
         if error:
