@@ -876,7 +876,7 @@ const PROBLEMS = {
       { input: 's = ["h","e","l","l","o"]', output: '["o","l","l","e","h"]', explain: "Reverse the array in place" },
       { input: 's = ["H","a","n","n","a","h"]', output: '["h","a","n","n","a","H"]', explain: "Reverse the array in place" },
     ],
-    starter: { python: `def reverseString(s):\n    # Write your solution here\n    pass`, javascript: `function reverseString(s) {\n    // Modify in place\n}`, c: `void reverseString(char* s, int sSize) {\n    // Write your solution here\n}`, java: `public static void reverseString(char[] s) {\n    // Write your solution here\n}` },
+    starter: { python: `def reverseString(s):\n    # Write your solution here\n    pass`, javascript: `function reverseString(s) {\n    // Modify in place\n}`, cpp: `void reverseString(vector<char>& s) {\n    // Write your solution here\n}`, c: `void reverseString(char* s, int sSize) {\n    // Write your solution here\n}`, java: `public static void reverseString(char[] s) {\n    // Write your solution here\n}` },
   },
   3: {
     id: 3, title: "FizzBuzz", difficulty: "Easy", diffClass: "tag-e", companies: "Apple · Netflix",
@@ -885,7 +885,7 @@ const PROBLEMS = {
       { input: "n = 3", output: '["1","2","Fizz"]', explain: "3 is divisible by 3" },
       { input: "n = 5", output: '["1","2","Fizz","4","Buzz"]', explain: "5 is divisible by 5" },
     ],
-    starter: { python: `def fizzBuzz(n):\n    # Write your solution here\n    pass`, javascript: `function fizzBuzz(n) {\n    // Write your solution here\n}`, c: `void fizzBuzz(int n) {\n    // Print each result on new line\n}`, java: `public static java.util.List<String> fizzBuzz(int n) {\n    // Write your solution here\n    return new java.util.ArrayList<>();\n}` },
+    starter: { python: `def fizzBuzz(n):\n    # Write your solution here\n    pass`, javascript: `function fizzBuzz(n) {\n    // Write your solution here\n}`, cpp: `vector<string> fizzBuzz(int n) {\n    // Write your solution here\n    return {};\n}`, c: `void fizzBuzz(int n) {\n    // Print each result on new line\n}`, java: `public static java.util.List<String> fizzBuzz(int n) {\n    // Write your solution here\n    return new java.util.ArrayList<>();\n}` },
   },
   4: {
     id: 4, title: "Palindrome Number", difficulty: "Easy", diffClass: "tag-e", companies: "Amazon · Adobe",
@@ -894,7 +894,7 @@ const PROBLEMS = {
       { input: "x = 121", output: "True", explain: "121 reads as 121 from left to right and right to left" },
       { input: "x = -121", output: "False", explain: "From left to right it reads -121. From right to left it reads 121-" },
     ],
-    starter: { python: `def isPalindrome(x):\n    # Write your solution here\n    pass`, javascript: `function isPalindrome(x) {\n    // Write your solution here\n}`, c: `int isPalindrome(int x) {\n    // return 1 for true, 0 for false\n}`, java: `public static boolean isPalindrome(int x) {\n    // Write your solution here\n    return false;\n}` },
+    starter: { python: `def isPalindrome(x):\n    # Write your solution here\n    pass`, javascript: `function isPalindrome(x) {\n    // Write your solution here\n}`, cpp: `bool isPalindrome(int x) {\n    // Write your solution here\n    return false;\n}`, c: `int isPalindrome(int x) {\n    // return 1 for true, 0 for false\n}`, java: `public static boolean isPalindrome(int x) {\n    // Write your solution here\n    return false;\n}` },
   },
   5: {
     id: 5, title: "Maximum Subarray", difficulty: "Medium", diffClass: "tag-m", companies: "Google · Microsoft",
@@ -903,7 +903,7 @@ const PROBLEMS = {
       { input: "nums = [-2,1,-3,4,-1,2,1,-5,4]", output: "6", explain: "Subarray [4,-1,2,1] has the largest sum = 6" },
       { input: "nums = [1]", output: "1", explain: "Only one element" },
     ],
-    starter: { python: `def maxSubArray(nums):\n    # Write your solution here\n    pass`, javascript: `function maxSubArray(nums) {\n    // Write your solution here\n}`, c: `int maxSubArray(int* nums, int numsSize) {\n    // Write your solution here\n}`, java: `public static int maxSubArray(int[] nums) {\n    // Write your solution here\n    return 0;\n}` },
+    starter: { python: `def maxSubArray(nums):\n    # Write your solution here\n    pass`, javascript: `function maxSubArray(nums) {\n    // Write your solution here\n}`, cpp: `int maxSubArray(vector<int>& nums) {\n    // Write your solution here\n    return 0;\n}`, c: `int maxSubArray(int* nums, int numsSize) {\n    // Write your solution here\n}`, java: `public static int maxSubArray(int[] nums) {\n    // Write your solution here\n    return 0;\n}` },
   },
   6: {
     id: 6, title: "Valid Parentheses", difficulty: "Easy", diffClass: "tag-e", companies: "Facebook · Twitter",
@@ -913,7 +913,7 @@ const PROBLEMS = {
       { input: 's = "()[]{}"', output: "True", explain: "All brackets match in order" },
       { input: 's = "(]"', output: "False", explain: "Brackets do not match" },
     ],
-    starter: { python: `def isValid(s):\n    # Write your solution here\n    pass`, javascript: `function isValid(s) {\n    // Write your solution here\n}`, c: `int isValid(char* s) {\n    // return 1 for true, 0 for false\n}`, java: `public static boolean isValid(String s) {\n    // Write your solution here\n    return false;\n}` },
+    starter: { python: `def isValid(s):\n    # Write your solution here\n    pass`, javascript: `function isValid(s) {\n    // Write your solution here\n}`, cpp: `bool isValid(string s) {\n    // Write your solution here\n    return false;\n}`, c: `int isValid(char* s) {\n    // return 1 for true, 0 for false\n}`, java: `public static boolean isValid(String s) {\n    // Write your solution here\n    return false;\n}` },
   },
   7: {
     id: 7, title: "Climbing Stairs", difficulty: "Easy", diffClass: "tag-e", companies: "Amazon · Apple",
@@ -922,7 +922,7 @@ const PROBLEMS = {
       { input: "n = 2", output: "2", explain: "1+1 or 2 — two ways" },
       { input: "n = 3", output: "3", explain: "1+1+1, 1+2, 2+1 — three ways" },
     ],
-    starter: { python: `def climbStairs(n):\n    # Write your solution here\n    pass`, javascript: `function climbStairs(n) {\n    // Write your solution here\n}`, c: `int climbStairs(int n) {\n    // Write your solution here\n}`, java: `public static int climbStairs(int n) {\n    // Write your solution here\n    return 0;\n}` },
+    starter: { python: `def climbStairs(n):\n    # Write your solution here\n    pass`, javascript: `function climbStairs(n) {\n    // Write your solution here\n}`, cpp: `int climbStairs(int n) {\n    // Write your solution here\n    return 0;\n}`, c: `int climbStairs(int n) {\n    // Write your solution here\n}`, java: `public static int climbStairs(int n) {\n    // Write your solution here\n    return 0;\n}` },
   },
   8: {
     id: 8, title: "Best Time to Buy Stock", difficulty: "Easy", diffClass: "tag-e", companies: "Amazon · Goldman Sachs",
@@ -931,7 +931,7 @@ const PROBLEMS = {
       { input: "prices = [7,1,5,3,6,4]", output: "5", explain: "Buy on day 2 (price=1), sell on day 5 (price=6), profit = 5" },
       { input: "prices = [7,6,4,3,1]", output: "0", explain: "No profit possible, return 0" },
     ],
-    starter: { python: `def maxProfit(prices):\n    # Write your solution here\n    pass`, javascript: `function maxProfit(prices) {\n    // Write your solution here\n}`, c: `int maxProfit(int* prices, int pricesSize) {\n    // Write your solution here\n}`, java: `public static int maxProfit(int[] prices) {\n    // Write your solution here\n    return 0;\n}` },
+    starter: { python: `def maxProfit(prices):\n    # Write your solution here\n    pass`, javascript: `function maxProfit(prices) {\n    // Write your solution here\n}`, cpp: `int maxProfit(vector<int>& prices) {\n    // Write your solution here\n    return 0;\n}`, c: `int maxProfit(int* prices, int pricesSize) {\n    // Write your solution here\n}`, java: `public static int maxProfit(int[] prices) {\n    // Write your solution here\n    return 0;\n}` },
   },
   9: {
     id: 9, title: "Missing Number", difficulty: "Easy", diffClass: "tag-e", companies: "Microsoft · LinkedIn",
@@ -940,7 +940,7 @@ const PROBLEMS = {
       { input: "nums = [3,0,1]", output: "2", explain: "n = 3, numbers 0,1,3 present, 2 is missing" },
       { input: "nums = [0,1]", output: "2", explain: "n = 2, numbers 0,1 present, 2 is missing" },
     ],
-    starter: { python: `def missingNumber(nums):\n    # Write your solution here\n    pass`, javascript: `function missingNumber(nums) {\n    // Write your solution here\n}`, c: `int missingNumber(int* nums, int numsSize) {\n    // Write your solution here\n}`, java: `public static int missingNumber(int[] nums) {\n    // Write your solution here\n    return 0;\n}` },
+    starter: { python: `def missingNumber(nums):\n    # Write your solution here\n    pass`, javascript: `function missingNumber(nums) {\n    // Write your solution here\n}`, cpp: `int missingNumber(vector<int>& nums) {\n    // Write your solution here\n    return 0;\n}`, c: `int missingNumber(int* nums, int numsSize) {\n    // Write your solution here\n}`, java: `public static int missingNumber(int[] nums) {\n    // Write your solution here\n    return 0;\n}` },
   },
   10: {
     id: 10, title: "Count Vowels", difficulty: "Easy", diffClass: "tag-e", companies: "Infosys · TCS",
@@ -949,7 +949,7 @@ const PROBLEMS = {
       { input: 's = "Hello World"', output: "3", explain: "e, o, o are vowels" },
       { input: 's = "Python"', output: "1", explain: "o is the only vowel" },
     ],
-    starter: { python: `def countVowels(s):\n    # Write your solution here\n    pass`, javascript: `function countVowels(s) {\n    // Write your solution here\n}`, c: `int countVowels(char* s) {\n    // Write your solution here\n}`, java: `public static int countVowels(String s) {\n    // Write your solution here\n    return 0;\n}` },
+    starter: { python: `def countVowels(s):\n    # Write your solution here\n    pass`, javascript: `function countVowels(s) {\n    // Write your solution here\n}`, cpp: `int countVowels(string s) {\n    // Write your solution here\n    return 0;\n}`, c: `int countVowels(char* s) {\n    // Write your solution here\n}`, java: `public static int countVowels(String s) {\n    // Write your solution here\n    return 0;\n}` },
   },
   11: {
     id: 11, title: "Factorial", difficulty: "Easy", diffClass: "tag-e", companies: "Wipro · Accenture",
@@ -958,7 +958,7 @@ const PROBLEMS = {
       { input: "n = 5", output: "120", explain: "5 x 4 x 3 x 2 x 1 = 120" },
       { input: "n = 0", output: "1", explain: "Factorial of 0 is 1 by definition" },
     ],
-    starter: { python: `def factorial(n):\n    # Write your solution here\n    pass`, javascript: `function factorial(n) {\n    // Write your solution here\n}`, c: `long long factorial(int n) {\n    // Write your solution here\n}`, java: `public static long factorial(int n) {\n    // Write your solution here\n    return 0;\n}` },
+    starter: { python: `def factorial(n):\n    # Write your solution here\n    pass`, javascript: `function factorial(n) {\n    // Write your solution here\n}`, cpp: `long long factorial(int n) {\n    // Write your solution here\n    return 0;\n}`, c: `long long factorial(int n) {\n    // Write your solution here\n}`, java: `public static long factorial(int n) {\n    // Write your solution here\n    return 0;\n}` },
   },
   12: {
     id: 12, title: "Find Maximum", difficulty: "Easy", diffClass: "tag-e", companies: "Google · Flipkart",
@@ -967,7 +967,7 @@ const PROBLEMS = {
       { input: "nums = [3,1,4,1,5,9,2,6]", output: "9", explain: "9 is the largest element" },
       { input: "nums = [-5,-3,-1,-4]", output: "-1", explain: "-1 is the largest among negatives" },
     ],
-    starter: { python: `def findMax(nums):\n    # Write your solution here\n    pass`, javascript: `function findMax(nums) {\n    // Write your solution here\n}`, c: `int findMax(int* nums, int numsSize) {\n    // Write your solution here\n}`, java: `public static int findMax(int[] nums) {\n    // Write your solution here\n    return 0;\n}` },
+    starter: { python: `def findMax(nums):\n    # Write your solution here\n    pass`, javascript: `function findMax(nums) {\n    // Write your solution here\n}`, cpp: `int findMax(vector<int>& nums) {\n    // Write your solution here\n    return 0;\n}`, c: `int findMax(int* nums, int numsSize) {\n    // Write your solution here\n}`, java: `public static int findMax(int[] nums) {\n    // Write your solution here\n    return 0;\n}` },
   },
   13: {
     id: 13, title: "Second Largest", difficulty: "Medium", diffClass: "tag-m", companies: "Amazon · Zoho",
@@ -976,7 +976,7 @@ const PROBLEMS = {
       { input: "nums = [10, 5, 8, 20, 3]", output: "10", explain: "20 is largest, 10 is second largest" },
       { input: "nums = [5, 5, 5]", output: "-1", explain: "All elements same, no second largest" },
     ],
-    starter: { python: `def secondLargest(nums):\n    # Write your solution here\n    pass`, javascript: `function secondLargest(nums) {\n    // Write your solution here\n}`, c: `int secondLargest(int* nums, int numsSize) {\n    // Write your solution here\n}`, java: `public static int secondLargest(int[] nums) {\n    // Write your solution here\n    return -1;\n}` },
+    starter: { python: `def secondLargest(nums):\n    # Write your solution here\n    pass`, javascript: `function secondLargest(nums) {\n    // Write your solution here\n}`, cpp: `int secondLargest(vector<int>& nums) {\n    // Write your solution here\n    return -1;\n}`, c: `int secondLargest(int* nums, int numsSize) {\n    // Write your solution here\n}`, java: `public static int secondLargest(int[] nums) {\n    // Write your solution here\n    return -1;\n}` },
   },
 };
 
@@ -1145,9 +1145,9 @@ const CodingPage = ({ onNav, username, onLogout, userLevel = 1, userStreak = 0 }
           {/* Problem pane */}
           <div className="problem-pane">
             <div className="pane-tabs">
-              {["problem","hints","solution"].map(t => (
+              {["problem","hints"].map(t => (
                 <button key={t} className={`pane-tab${activeTab===t?" active":""}`} onClick={() => setActiveTab(t)}>
-                  {t==="problem"?"📋 Problem":t==="hints"?"💡 Hints":"📚 Solution"}
+                  {t==="problem"?"📋 Problem":"💡 Hints"}
                 </button>
               ))}
             </div>
@@ -1205,18 +1205,7 @@ Output: ${ex.output}${ex.explain ? `
                   </p>
                 )}
               </>}
-              {activeTab === "solution" && <>
-                <h3 style={{ marginBottom:14, fontFamily:"var(--display)" }} className="grad-text">📚 Optimal Solution</h3>
-                <p style={{ color:"var(--muted)", fontSize:14, marginBottom:16 }}>Single-pass hash map. O(n) time, O(n) space.</p>
-                <div style={{ background:"var(--bg1)", borderRadius:10, padding:"16px 20px", fontFamily:"var(--mono)", fontSize:13, lineHeight:1.8 }}>
-                  <div><span className="token-kw">def </span><span className="token-fn2">twoSum</span><span style={{ color:"#5a5a8a" }}>(nums, target):</span></div>
-                  <div style={{ paddingLeft:20 }}><span style={{ color:"#5a5a8a" }}>seen = {"{}"}</span></div>
-                  <div style={{ paddingLeft:20 }}><span className="token-kw">for </span><span className="token-fn">i, n </span><span className="token-kw">in </span><span className="token-fn2">enumerate</span><span style={{ color:"#5a5a8a" }}>(nums):</span></div>
-                  <div style={{ paddingLeft:40 }}><span className="token-kw">if </span><span style={{ color:"#5a5a8a" }}>target - n </span><span className="token-kw">in </span><span style={{ color:"#5a5a8a" }}>seen:</span></div>
-                  <div style={{ paddingLeft:60 }}><span className="token-kw">return </span><span style={{ color:"#5a5a8a" }}>[seen[target - n], i]</span></div>
-                  <div style={{ paddingLeft:40 }}><span style={{ color:"#5a5a8a" }}>seen[n] = i</span></div>
-                </div>
-              </>}
+
             </div>
           </div>
 
@@ -1237,10 +1226,8 @@ Output: ${ex.output}${ex.explain ? `
                 >
                   <option value="python">🐍 Python</option>
                   <option value="c">🔵 C</option>
-                  <option value="java">☕ Java</option>
-                  <option value="java">☕ Java</option>
                   <option value="cpp">⚡ C++</option>
-                  <option value="javascript">🟡 JS</option>
+                  <option value="java">☕ Java</option>
                 </select>
               </div>
               {/* Real textarea connected to code state */}
