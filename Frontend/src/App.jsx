@@ -648,9 +648,10 @@ const Sidebar = ({ activePage, onNav, username, onLogout, level, streak }) => {
 
   const items = [
     { id: "dashboard", icon: "⬡", label: "Dashboard" },
-    { id: "coding",    icon: "{ }", label: "Practice", badge: "3" },
+    { id: "coding",    icon: "{ }", label: "Practice", badge: "13" },
     { id: "interview", icon: "◈",  label: "Interview", badge: "HOT" },
     { id: "analytics", icon: "▦",  label: "Analytics" },
+    { id: "profile",   icon: "👤",  label: "Profile" },
   ];
   return (
     <aside className="sidebar">
@@ -1752,6 +1753,149 @@ const Interview = ({ onNav, username, onLogout, userLevel = 1, userStreak = 0 })
 };
 
 /* ─────────────────────────────────────────
+   PROFILE PAGE
+───────────────────────────────────────── */
+const ProfilePage = ({ onNav, username, onLogout, userLevel = 1, userStreak = 0 }) => {
+  const [stats, setStats]     = useState(null);
+  const [editing, setEditing] = useState(false);
+  const [bio, setBio]         = useState(localStorage.getItem("skillx_bio") || "");
+  const [college, setCollege] = useState(localStorage.getItem("skillx_college") || "");
+  const [github, setGithub]   = useState(localStorage.getItem("skillx_github") || "");
+  const toast = React.useContext(ToastContext);
+
+  const safeName    = username || "Developer";
+  const safeLevel   = Math.max(1, Number(userLevel) || 1);
+  const avatarLetter = safeName.charAt(0).toUpperCase();
+  const getLevelTitle = (l) => ["","Newbie","Beginner","Intermediate","Advanced","Master","Legend"][Math.min(l,6)] || "Legend";
+  const getLevelColor = (l) => l >= 5 ? "#f59e0b" : l >= 3 ? "#a855f7" : "#818cf8";
+
+  useEffect(() => {
+    apiCall("/dashboard/","GET",null,true).then(d => setStats(d)).catch(()=>{});
+  }, []);
+
+  const saveProfile = () => {
+    localStorage.setItem("skillx_bio", bio);
+    localStorage.setItem("skillx_college", college);
+    localStorage.setItem("skillx_github", github);
+    setEditing(false);
+    toast("✅ Profile saved!", "#a3e635");
+  };
+
+  const solved      = stats ? stats.problems_solved : 0;
+  const accuracy    = stats ? stats.accuracy : 0;
+  const submissions = stats ? stats.submissions : 0;
+
+  return (
+    <div className="app-shell page-enter" style={{ position:"relative", zIndex:1 }}>
+      <Sidebar activePage="profile" onNav={onNav} username={safeName} onLogout={onLogout} level={safeLevel} streak={userStreak} />
+      <main className="main-content">
+        <div style={{ maxWidth:800, margin:"0 auto", padding:"32px 24px" }}>
+
+          {/* Profile Header */}
+          <div style={{ display:"flex", alignItems:"center", gap:24, marginBottom:28, background:"linear-gradient(135deg,rgba(129,140,248,.08),rgba(167,139,250,.05))", border:"1px solid rgba(129,140,248,.15)", borderRadius:20, padding:28 }}>
+            <div style={{ width:80, height:80, borderRadius:"50%", background:"linear-gradient(135deg,var(--p1),var(--p2))", display:"flex", alignItems:"center", justifyContent:"center", fontSize:32, fontWeight:900, color:"#fff", flexShrink:0, boxShadow:"0 0 30px rgba(129,140,248,.3)" }}>
+              {avatarLetter}
+            </div>
+            <div style={{ flex:1 }}>
+              <h1 style={{ fontFamily:"var(--display)", fontSize:26, fontWeight:900, marginBottom:6 }}>{safeName}</h1>
+              <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:8 }}>
+                <span style={{ background:"rgba(129,140,248,.15)", border:"1px solid rgba(129,140,248,.3)", borderRadius:20, padding:"3px 12px", fontSize:12, color:getLevelColor(safeLevel), fontWeight:700 }}>✦ Level {safeLevel} · {getLevelTitle(safeLevel)}</span>
+                <span style={{ background:"rgba(52,211,153,.1)", border:"1px solid rgba(52,211,153,.2)", borderRadius:20, padding:"3px 12px", fontSize:12, color:"#34d399", fontWeight:700 }}>🔥 {userStreak} Day Streak</span>
+              </div>
+              {bio     && <p style={{ color:"var(--muted)", fontSize:13, marginBottom:4 }}>{bio}</p>}
+              {college && <p style={{ color:"var(--muted)", fontSize:12, marginBottom:4 }}>🎓 {college}</p>}
+              {github  && <p style={{ color:"#818cf8", fontSize:12, cursor:"pointer" }} onClick={() => window.open("https://github.com/"+github,"_blank")}>🔗 github.com/{github}</p>}
+            </div>
+            <button className="btn btn-ghost btn-sm" onClick={() => setEditing(!editing)} style={{ flexShrink:0 }}>
+              {editing ? "✕ Cancel" : "✏️ Edit"}
+            </button>
+          </div>
+
+          {/* Edit Form */}
+          {editing && (
+            <div style={{ background:"rgba(129,140,248,.05)", border:"1px solid rgba(129,140,248,.15)", borderRadius:16, padding:24, marginBottom:24 }}>
+              <h3 style={{ fontFamily:"var(--display)", marginBottom:16, fontSize:16 }} className="grad-text">✏️ Edit Profile</h3>
+              <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+                {[
+                  { label:"BIO", val:bio, set:setBio, placeholder:"Tell us about yourself..." },
+                  { label:"COLLEGE / COMPANY", val:college, set:setCollege, placeholder:"e.g. IIT Delhi, Google..." },
+                  { label:"GITHUB USERNAME", val:github, set:setGithub, placeholder:"e.g. laxmiyadav708" },
+                ].map(({ label, val, set, placeholder }) => (
+                  <div key={label}>
+                    <label style={{ fontSize:12, color:"var(--muted)", display:"block", marginBottom:4 }}>{label}</label>
+                    <input value={val} onChange={e => set(e.target.value)} placeholder={placeholder}
+                      style={{ width:"100%", background:"var(--bg1)", border:"1px solid var(--border)", borderRadius:8, padding:"8px 12px", color:"var(--text)", fontSize:13, boxSizing:"border-box" }} />
+                  </div>
+                ))}
+                <button className="btn btn-primary" onClick={saveProfile}>💾 Save Profile</button>
+              </div>
+            </div>
+          )}
+
+          {/* Stats Cards */}
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:16, marginBottom:24 }}>
+            {[
+              { label:"Problems Solved", value:solved,       icon:"✅", color:"#a3e635" },
+              { label:"Accuracy",        value:accuracy+"%", icon:"🎯", color:"#818cf8" },
+              { label:"Submissions",     value:submissions,  icon:"📤", color:"#f472b6" },
+              { label:"Level",           value:safeLevel,    icon:"⭐", color:getLevelColor(safeLevel) },
+            ].map(({ label, value, icon, color }) => (
+              <div key={label} style={{ background:"rgba(129,140,248,.05)", border:"1px solid rgba(129,140,248,.1)", borderRadius:14, padding:16, textAlign:"center" }}>
+                <div style={{ fontSize:24, marginBottom:6 }}>{icon}</div>
+                <div style={{ fontSize:22, fontWeight:900, color, fontFamily:"var(--mono)" }}>{value}</div>
+                <div style={{ fontSize:11, color:"var(--muted)", marginTop:4 }}>{label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Level Progress */}
+          <div style={{ background:"rgba(129,140,248,.05)", border:"1px solid rgba(129,140,248,.1)", borderRadius:16, padding:20, marginBottom:24 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:10 }}>
+              <span style={{ fontSize:14, fontWeight:700 }}>Progress to Level {safeLevel + 1} — {getLevelTitle(safeLevel+1)}</span>
+              <span style={{ fontSize:12, color:"var(--muted)", fontFamily:"var(--mono)" }}>{solved} / {safeLevel * 2 + 2} problems</span>
+            </div>
+            <div style={{ height:8, background:"rgba(255,255,255,.05)", borderRadius:99, overflow:"hidden" }}>
+              <div style={{ height:"100%", width:Math.min(100,(solved/(safeLevel*2+2))*100)+"%", background:"linear-gradient(90deg,var(--p1),var(--p2))", borderRadius:99, transition:"width .5s" }} />
+            </div>
+            <p style={{ fontSize:12, color:"var(--muted)", marginTop:8 }}>
+              Solve {Math.max(0,(safeLevel*2+2)-solved)} more problems to reach {getLevelTitle(safeLevel+1)}!
+            </p>
+          </div>
+
+          {/* Problems Solved */}
+          <div style={{ background:"rgba(129,140,248,.05)", border:"1px solid rgba(129,140,248,.1)", borderRadius:16, padding:20 }}>
+            <h3 style={{ fontFamily:"var(--display)", fontSize:16, marginBottom:16 }} className="grad-text">🏆 Problems Solved ({solved})</h3>
+            {solved > 0 ? (
+              <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                {Object.values(PROBLEMS).slice(0, solved).map(p => (
+                  <div key={p.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:"rgba(163,230,53,.05)", border:"1px solid rgba(163,230,53,.1)", borderRadius:10, padding:"10px 16px" }}>
+                    <div>
+                      <span style={{ fontSize:13, fontWeight:700 }}>{p.id}. {p.title}</span>
+                      <span style={{ fontSize:11, color:"var(--muted)", marginLeft:8, fontFamily:"var(--mono)" }}>{p.companies}</span>
+                    </div>
+                    <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                      <span className={`tag ${p.diffClass}`}>{p.difficulty}</span>
+                      <span style={{ color:"#a3e635", fontSize:16 }}>✅</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ textAlign:"center", padding:30, color:"var(--muted)" }}>
+                <div style={{ fontSize:40, marginBottom:8 }}>💻</div>
+                <p style={{ marginBottom:12 }}>No problems solved yet. Start practicing!</p>
+                <button className="btn btn-primary" onClick={() => onNav("coding")}>Start Practicing →</button>
+              </div>
+            )}
+          </div>
+
+        </div>
+      </main>
+    </div>
+  );
+};
+
+/* ─────────────────────────────────────────
    ROOT APP
 ───────────────────────────────────────── */
 export default function App() {
@@ -1759,7 +1903,7 @@ export default function App() {
   const [page, setPage] = useState(() => {
     try {
       const saved = localStorage.getItem("skillx_page");
-      const valid = ["dashboard","coding","analytics","interview"];
+      const valid = ["dashboard","coding","analytics","interview","profile"];
       return valid.includes(saved) ? saved : "landing";
     } catch(e) { return "landing"; }
   });
@@ -1795,7 +1939,7 @@ export default function App() {
     setPage(p);
     window.scrollTo(0, 0);
     try {
-      const valid = ["dashboard","coding","analytics","interview"];
+      const valid = ["dashboard","coding","analytics","interview","profile"];
       if (valid.includes(p)) {
         localStorage.setItem("skillx_page", p);
       } else {
@@ -1824,6 +1968,7 @@ export default function App() {
       case "coding":    return <CodingPage onNav={onNav} username={displayName} onLogout={onLogout} userLevel={userLevel} userStreak={userStreak} />;
       case "analytics": return <Analytics  onNav={onNav} username={displayName} onLogout={onLogout} userLevel={userLevel} userStreak={userStreak} />;
       case "interview": return <Interview  onNav={onNav} username={displayName} onLogout={onLogout} userLevel={userLevel} userStreak={userStreak} />;
+      case "profile":   return <ProfilePage onNav={onNav} username={displayName} onLogout={onLogout} userLevel={userLevel} userStreak={userStreak} />;
       default:          return <Landing onNav={onNav} />;
     }
   };

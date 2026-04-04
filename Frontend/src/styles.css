@@ -1,5 +1,4 @@
-
-    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
     :root {
       --bg:    #060608;
       --bg1:   #0c0c10;
@@ -603,7 +602,8 @@
     .example-block { margin-top:18px; background:rgba(124,58,237,.025); border:1px solid rgba(124,58,237,.1); border-radius:10px; padding:14px; }
     .example-label { font-size:10px; font-weight:700; color:var(--muted); margin-bottom:8px; letter-spacing:1px; text-transform:uppercase; font-family:var(--mono); }
     .constraints { margin-top:18px; }
-    .select-input { background:rgba(124,58,237,.05); border:1px solid var(--border); border-radius:8px; padding:5px 11px; color:var(--text); font-family:var(--mono); font-size:12px; outline:none; }
+    .select-input { background:#1a1a2e; border:1px solid var(--border); border-radius:8px; padding:5px 11px; color:#e0e0ff; font-family:var(--mono); font-size:12px; outline:none; cursor:pointer; }
+    .select-input option { background:#1a1a2e; color:#e0e0ff; padding:8px; }
     .timer-display { font-family:var(--mono); font-size:13px; font-weight:700; color:var(--p3); }
 
     @media(max-width:1100px){
@@ -632,4 +632,4 @@
       .two-col{grid-template-columns:1fr}
       .sidebar{display:none}
     }
-  
+    
