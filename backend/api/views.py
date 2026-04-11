@@ -3,6 +3,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from django.contrib.auth.models import User
+from .models import Progress, SolvedProblem
 from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
 import subprocess
@@ -25,12 +26,16 @@ def get_tokens(user):
 
 # ── Home ──
 @api_view(['GET'])
+@permission_classes([AllowAny])
+
 def home(request):
     return Response({"message": "SkillX Backend Running ✦"}, status=status.HTTP_200_OK)
 
 
 # ── Signup ──
 @api_view(['POST'])
+@permission_classes([AllowAny])
+
 def signup(request):
     username = request.data.get("username", "").strip()
     email    = request.data.get("email", "").strip()
@@ -59,6 +64,8 @@ def signup(request):
 
 # ── Login ──
 @api_view(['POST'])
+@permission_classes([AllowAny])
+
 def login(request):
     username = request.data.get("username", "").strip()
     password = request.data.get("password", "")
@@ -114,10 +121,17 @@ def dashboard(request):
 # Key: username, Value: {problems_solved, accuracy_total, submissions}
 user_progress = {}
 
+# ── Database-backed progress tracker ──
 def get_progress(username):
-    if username not in user_progress:
-        user_progress[username] = {"problems_solved": 0, "total_score": 0, "submissions": 0, "solved_ids": set()}
-    return user_progress[username]
+    user = User.objects.get(username=username)
+    progress, _ = Progress.objects.get_or_create(user=user)
+    solved_ids = set(SolvedProblem.objects.filter(user=user).values_list('problem_id', flat=True))
+    return {
+        "problems_solved": progress.problems_solved,
+        "total_score": progress.score,
+        "submissions": progress.submissions,
+        "solved_ids": solved_ids
+    }
 
 
 # ── Problem test cases ──
@@ -1033,9 +1047,10 @@ def run_code(request):
     code       = request.data.get("code", "").strip()
     language   = request.data.get("language", "python")
     problem_id = int(request.data.get("problem_id", 1))
-
     if not code:
         return Response({"error": "No code provided"}, status=status.HTTP_400_BAD_REQUEST)
+    if len(code) > 5000:
+        return Response({"error": "Code too long. Maximum 5000 characters allowed."}, status=status.HTTP_400_BAD_REQUEST)
     if language not in ["python", "c", "cpp", "java"]:
         return Response({"error": "Only Python, C, C++ and Java are supported"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -1113,13 +1128,16 @@ def submit_code(request):
     accuracy = int((passed / total) * 100) if total > 0 else 0
     accepted = passed == total
 
-    # Save progress to in-memory tracker
-    progress = get_progress(request.user.username)
-    progress["submissions"] += 1
-    progress["total_score"] += accuracy
-    if accepted and problem_id not in progress["solved_ids"]:
-        progress["problems_solved"] += 1
-        progress["solved_ids"].add(problem_id)
+   # Save progress to database
+    user = request.user
+    progress_obj, _ = Progress.objects.get_or_create(user=user)
+    progress_obj.submissions += 1
+    progress_obj.score += accuracy
+    if accepted:
+        if not SolvedProblem.objects.filter(user=user, problem_id=problem_id).exists():
+            progress_obj.problems_solved += 1
+            SolvedProblem.objects.create(user=user, problem_id=problem_id)
+    progress_obj.save()
 
     return Response({
         "status":   "Accepted" if accepted else "Wrong Answer",
