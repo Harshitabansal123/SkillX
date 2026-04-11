@@ -1131,3 +1131,16 @@ def submit_code(request):
         "memory":   "14.2 MB",
         "feedback": "Great solution! Clean and efficient." if accepted else f"Failed {total - passed} case(s). Check your logic.",
     }, status=status.HTTP_200_OK)
+# ── Logout ──
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def logout(request):
+    try:
+        refresh_token = request.data.get("refresh")
+        if not refresh_token:
+            return Response({"error": "Refresh token required"}, status=status.HTTP_400_BAD_REQUEST)
+        token = RefreshToken(refresh_token)
+        token.blacklist()
+        return Response({"message": "Logged out successfully"}, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({"error": "Invalid or expired token"}, status=status.HTTP_400_BAD_REQUEST)
