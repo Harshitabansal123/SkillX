@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.contrib.auth.models import User
 from .models import Progress, SolvedProblem
+from .permissions import IsOwnerOrAdmin          # authorization helper
 from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
 import subprocess
@@ -97,9 +98,22 @@ def login(request):
 
 # ── Dashboard ──
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsOwnerOrAdmin])
 def dashboard(request):
     user = request.user
+    # Object-level check: admins may pass ?username= to view another user's dash
+    target_username = request.query_params.get("username")
+    if target_username and target_username != user.username:
+        from .permissions import is_admin
+        if not is_admin(user):
+            return Response(
+                {"error": "You are not authorised to view another user's dashboard."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        try:
+            user = User.objects.get(username=target_username)
+        except User.DoesNotExist:
+            return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
     progress = get_progress(user.username)
     solved   = progress["problems_solved"]
     subs     = progress["submissions"]
