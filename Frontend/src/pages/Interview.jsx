@@ -1,0 +1,1 @@
+export { Interview as default } from "./Companies.jsx";

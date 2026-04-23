@@ -16,6 +16,10 @@ class Progress(models.Model):
 class SolvedProblem(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='solved_problems')
     problem_id = models.IntegerField()
+<<<<<<< HEAD
+=======
+    solved_at = models.DateTimeField(auto_now_add=True)
+>>>>>>> master
 
     class Meta:
         unique_together = ('user', 'problem_id')
